@@ -21,6 +21,7 @@ export default function WorldShell({
   cta,
   lb,
   setLb,
+  hovered,
 }: {
   photos: Photo[];
   accent: string;
@@ -31,6 +32,7 @@ export default function WorldShell({
   cta?: { label: string; href: string };
   lb: number | null;
   setLb: (i: number | null) => void;
+  hovered?: Photo | null;
 }) {
   const [grid, setGrid] = useState(false);
   const [introGone, setIntroGone] = useState(false);
@@ -43,6 +45,27 @@ export default function WorldShell({
   return (
     <main className="fixed inset-0 overflow-hidden bg-black">
       {children}
+
+      {/* cinematic vignette */}
+      <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_52%,rgba(0,0,0,0.55)_100%)]" />
+
+      {/* hover label — location/caption of the photo under the cursor */}
+      <div
+        className={`pointer-events-none absolute bottom-14 left-1/2 z-10 -translate-x-1/2 text-center transition-opacity duration-300 ${
+          hovered ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        {hovered?.location && (
+          <div className="text-[10px] uppercase tracking-huge" style={{ color: accent }}>
+            {hovered.location}
+          </div>
+        )}
+        {hovered?.caption && (
+          <div className="mx-auto mt-1 max-w-[52ch] truncate text-[11px] font-light text-white/55">
+            {hovered.caption}
+          </div>
+        )}
+      </div>
 
       {/* intro title (fades out, pointer-through) */}
       <div

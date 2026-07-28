@@ -1,167 +1,114 @@
 "use client";
 
 /**
- * WEDDINGS — "The Film"
- * A cinematic, scroll-driven film reel: the viewport is the screen,
- * scrolling advances the frames with slow crossfades and a gentle push-in,
- * intertitles appear between acts like a silent movie. Ends on a credits
- * wall with every frame.
+ * WEDDINGS — "The Orbit" (v2)
+ * Five clean bands of photographs circle you like rings of a carousel,
+ * each band turning at its own speed — some clockwise, some counter.
+ * Uniform heights and computed spacing: airy, ordered, alive.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useState } from "react";
 import type { Photo } from "@/lib/supabase";
-import { fetchPhotos, imgSrc, thumbSrc } from "@/lib/photos";
-import Lightbox from "@/components/Lightbox";
-import Footer from "@/components/Footer";
+import { fetchPhotos } from "@/lib/photos";
+import WorldShell from "./WorldShell";
+import type { WorldNode } from "./World";
 import { SITE } from "@/lib/site";
 
-const ACTS = [
-  { at: 0.0, title: "Act I", line: "Before — the quiet, the nerves, the getting ready" },
-  { at: 0.28, title: "Act II", line: "The vows — everything they promised each other" },
-  { at: 0.56, title: "Act III", line: "The night — when the floor catches fire" },
-  { at: 0.85, title: "Fin", line: "And they kept on going" },
+const World = dynamic(() => import("./World"), { ssr: false });
+
+const ACCENT = "#caa87c";
+
+// [radius, y, angular speed (rad/s), photo height]
+const BANDS: [number, number, number, number][] = [
+  [17.5, 7.2, 0.020, 2.6],
+  [14.5, 3.6, -0.014, 2.9],
+  [13.0, 0.0, 0.010, 3.2],
+  [14.5, -3.6, -0.017, 2.9],
+  [17.5, -7.2, 0.023, 2.6],
 ];
+const GAP = 1.6; // world units between photos along the band
 
 export default function WeddingFilm() {
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [progress, setProgress] = useState(0);
   const [lb, setLb] = useState<number | null>(null);
-  const reelRef = useRef<HTMLDivElement>(null);
+  const [hov, setHov] = useState<Photo | null>(null);
 
   useEffect(() => {
     fetchPhotos("weddings").then(setPhotos).catch(console.error);
   }, []);
 
-  // scroll progress over the reel section
-  useEffect(() => {
-    const f = () => {
-      const el = reelRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const total = r.height - window.innerHeight;
-      const p = Math.min(1, Math.max(0, -r.top / Math.max(1, total)));
-      setProgress(p);
-    };
-    f();
-    window.addEventListener("scroll", f, { passive: true });
-    window.addEventListener("resize", f);
-    return () => {
-      window.removeEventListener("scroll", f);
-      window.removeEventListener("resize", f);
-    };
+  const layout = useCallback((all: Photo[]): WorldNode[] => {
+    const nodes: WorldNode[] = [];
+    let idx = 0;
+    for (const [r, y, speed, h] of BANDS) {
+      if (idx >= all.length) break;
+      // measure how many photos fit on this band without crowding
+      const circumference = 2 * Math.PI * r;
+      const widths: number[] = [];
+      let used = 0;
+      let probe = idx;
+      while (probe < all.length) {
+        const p = all[probe];
+        const w = h * ((p.width || 1440) / (p.height || 960));
+        if (used + w + GAP > circumference) break;
+        widths.push(w);
+        used += w + GAP;
+        probe++;
+      }
+      const n = widths.length;
+      if (n === 0) break;
+      // distribute remaining slack evenly
+      const slack = (circumference - used) / n;
+      let arc = 0;
+      for (let j = 0; j < n; j++, idx++) {
+        const p = all[idx];
+        const w = widths[j];
+        const centerArc = arc + w / 2;
+        const phase = (centerArc / circumference) * Math.PI * 2;
+        arc += w + GAP + slack;
+        nodes.push({
+          photo: p,
+          index: idx,
+          pos: [Math.cos(phase) * r, y, Math.sin(phase) * r],
+          rot: [0, Math.atan2(Math.cos(phase) * r, Math.sin(phase) * r) + Math.PI, 0],
+          w,
+          h,
+          orbit: { r, y, speed, phase },
+        });
+      }
+    }
+    return nodes;
   }, []);
 
-  // pick the reel frames (up to 42, keep order)
-  const reel = useMemo(() => photos.slice(0, 42), [photos]);
-  const fIdx = reel.length
-    ? Math.min(reel.length - 1, Math.floor(progress * reel.length))
-    : 0;
-  const frameP = reel.length ? progress * reel.length - fIdx : 0; // 0..1 inside frame
-
-  const act = ACTS.filter((a) => progress >= a.at).pop();
-
   return (
-    <main className="bg-black">
-      {/* opening title */}
-      <section className="flex h-[100svh] flex-col items-center justify-center text-center">
-        <div className="text-[10px] uppercase tracking-huge text-[#caa87c]">
-          ziggyweddings presents
-        </div>
-        <h1 className="font-display mt-6 text-6xl font-light italic md:text-8xl">
-          The Film
-        </h1>
-        <div className="mt-6 max-w-[38ch] text-xs font-light leading-relaxed text-white/40">
-          Two people, one day, and every unrepeatable second in between.
-          Scroll to roll the reel.
-        </div>
-        <div className="mt-12 h-14 w-px animate-pulse bg-white/30" />
-      </section>
-
-      {/* THE REEL — sticky screen, tall scroll body */}
-      <div ref={reelRef} style={{ height: `${Math.max(reel.length, 8) * 55}vh` }}>
-        <div className="sticky top-0 h-[100svh] overflow-hidden">
-          {/* letterbox bars */}
-          <div className="absolute inset-x-0 top-0 z-20 h-[7vh] bg-black" />
-          <div className="absolute inset-x-0 bottom-0 z-20 h-[7vh] bg-black" />
-
-          {reel.map((p, i) => {
-            const active = i === fIdx;
-            const prev = i === fIdx - 1 || (fIdx === 0 && i === 0);
-            if (!active && !prev && i !== fIdx + 1) return null;
-            const scale = active ? 1.02 + frameP * 0.06 : 1.02;
-            const opacity = active ? 1 : i < fIdx ? 1 - frameP * 1.6 : 0;
-            return (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={p.id}
-                src={imgSrc(p)}
-                alt={p.caption || "wedding"}
-                className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200 [filter:sepia(0.12)_contrast(1.04)]"
-                style={{ opacity, transform: `scale(${scale})`, zIndex: active ? 10 : 5 }}
-              />
-            );
-          })}
-
-          {/* act intertitle */}
-          {act && (
-            <div
-              key={act.title}
-              className="pointer-events-none absolute inset-x-0 top-[11vh] z-30 text-center"
-            >
-              <span className="font-display bg-black/45 px-6 py-2 text-xs uppercase tracking-huge text-[#caa87c] backdrop-blur-sm">
-                {act.title} · {act.line}
-              </span>
-            </div>
-          )}
-
-          {/* frame counter */}
-          <div className="absolute bottom-[9vh] right-6 z-30 font-mono text-[10px] tracking-widest text-white/50">
-            {String(fIdx + 1).padStart(2, "0")} / {String(reel.length || 0).padStart(2, "0")}
-          </div>
-          {/* progress line */}
-          <div className="absolute bottom-[7vh] left-0 z-30 h-px bg-[#caa87c]" style={{ width: `${progress * 100}%` }} />
-        </div>
-      </div>
-
-      {/* CREDITS WALL */}
-      <section className="mx-auto max-w-[1500px] px-4 py-28 md:px-8">
-        <div className="mb-3 text-center text-[10px] uppercase tracking-huge text-[#caa87c]">
-          Credits
-        </div>
-        <h2 className="font-display mb-14 text-center text-4xl font-light italic md:text-5xl">
-          Every frame of the day
-        </h2>
-        <div className="columns-2 gap-3 md:columns-4">
-          {photos.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => setLb(i)}
-              className="group mb-3 block w-full overflow-hidden"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={thumbSrc(p)}
-                alt={p.caption || "wedding"}
-                loading="lazy"
-                className="w-full opacity-80 transition-all duration-700 [filter:sepia(0.1)] group-hover:scale-[1.03] group-hover:opacity-100"
-              />
-            </button>
-          ))}
-        </div>
-        <div className="mt-20 text-center">
-          <a
-            href={SITE.whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block border border-[#caa87c] px-10 py-4 text-[11px] uppercase tracking-huge text-[#caa87c] transition-all hover:bg-[#caa87c] hover:text-black"
-          >
-            Book your wedding
-          </a>
-        </div>
-      </section>
-
-      <Lightbox photos={photos} index={lb} onClose={() => setLb(null)} onMove={setLb} accent="#caa87c" />
-      <Footer />
-    </main>
+    <WorldShell
+      photos={photos}
+      accent={ACCENT}
+      eyebrow="ziggyweddings"
+      title="The Orbit"
+      sub="The whole day circles around you — grab it, spin it, step inside"
+      cta={{ label: "Book your wedding", href: SITE.whatsappUrl }}
+      lb={lb}
+      setLb={setLb}
+      hovered={hov}
+    >
+      {photos.length > 0 && (
+        <World
+          photos={photos}
+          layout={layout}
+          onPick={setLb}
+          onHover={setHov}
+          background="#0a0705"
+          startDistance={31}
+          minDistance={4}
+          maxDistance={44}
+          fogNear={18}
+          fogFar={64}
+          autoRotate={0.25}
+          dimOpacity={0.96}
+        />
+      )}
+    </WorldShell>
   );
 }

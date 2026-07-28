@@ -1,97 +1,91 @@
 "use client";
 
 /**
- * DOCUMENTARY & STREET — "The Swarm"
- * A deep 3D tunnel of floating photographs you fly through by scrolling.
- * Mouse steers gently; every photo is clickable. After the flight, the
- * full archive lands in a grid.
+ * DOCUMENTARY & STREET — "The Sphere" (v2)
+ * A fibonacci sphere of photographs around you — fewer, larger radius,
+ * uniform sizing, minimal jitter: the galaxy reads as one calm object,
+ * and diving inside still surrounds you completely.
  */
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Photo } from "@/lib/supabase";
-import { fetchPhotos, thumbSrc } from "@/lib/photos";
-import Lightbox from "@/components/Lightbox";
-import Footer from "@/components/Footer";
+import { fetchPhotos, hash01 } from "@/lib/photos";
+import WorldShell from "./WorldShell";
+import type { WorldNode } from "./World";
 
-const SwarmCanvas = dynamic(() => import("./SwarmCanvas"), { ssr: false });
+const World = dynamic(() => import("./World"), { ssr: false });
+
+const COUNT = 190;
 
 export default function DocumentarySwarm() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [lb, setLb] = useState<number | null>(null);
-  const [visible, setVisible] = useState(240); // grid pagination
+  const [hov, setHov] = useState<Photo | null>(null);
 
   useEffect(() => {
     fetchPhotos("documentary").then(setPhotos).catch(console.error);
   }, []);
 
+  const layout = useCallback((all: Photo[]): WorldNode[] => {
+    const step = Math.max(1, Math.floor(all.length / COUNT));
+    const picked: { p: Photo; gi: number }[] = [];
+    for (let i = 0; i < all.length && picked.length < COUNT; i += step)
+      picked.push({ p: all[i], gi: i });
+
+    const N = picked.length;
+    const GA = Math.PI * (3 - Math.sqrt(5));
+    // two shells only, well separated
+    return picked.map(({ p, gi }, i) => {
+      const shell = i % 2;
+      const r = shell === 0 ? 17 : 24;
+      const k = Math.floor(i / 2);
+      const n = Math.ceil(N / 2);
+      const y = 1 - (k / Math.max(1, n - 1)) * 2;
+      const rad = Math.sqrt(Math.max(0, 1 - y * y));
+      const th = GA * k + shell * Math.PI; // offset shells so they interleave
+      const x = Math.cos(th) * rad * r;
+      const z = Math.sin(th) * rad * r;
+      const yy = y * r * 0.82;
+      const ar = (p.width || 1080) / (p.height || 1080);
+      const h = 2.2 + hash01(p.filename, 5) * 0.5; // near-uniform size
+      return {
+        photo: p,
+        index: gi,
+        pos: [x, yy, z] as [number, number, number],
+        rot: [0, Math.atan2(x, z) + Math.PI, 0] as [number, number, number],
+        w: h * ar,
+        h,
+      };
+    });
+  }, []);
+
   return (
-    <main className="bg-black">
-      {/* 3D flight — tall scroll body drives the camera */}
-      <div className="relative" style={{ height: "1400vh" }}>
-        <div className="sticky top-0 h-[100svh] overflow-hidden">
-          {photos.length > 0 && (
-            <SwarmCanvas
-              photos={photos}
-              onPick={(i) => setLb(i)}
-            />
-          )}
-
-          {/* HUD */}
-          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-center opacity-0 [animation:fadeInOut_5s_ease-out_forwards]">
-            <div className="text-[10px] uppercase tracking-huge text-white/60">
-              Documentary & Street
-            </div>
-            <h1 className="font-display mt-4 text-5xl font-light italic md:text-7xl">
-              The Swarm
-            </h1>
-            <div className="mt-4 text-[11px] font-light text-white/40">
-              759 photographs · scroll to fly · click to look closer
-            </div>
-          </div>
-          <style>{`@keyframes fadeInOut{0%{opacity:0}12%{opacity:1}70%{opacity:1}100%{opacity:0}}`}</style>
-        </div>
-      </div>
-
-      {/* THE ARCHIVE GRID */}
-      <section className="mx-auto max-w-[1600px] px-3 py-24 md:px-6">
-        <div className="mb-3 text-center text-[10px] uppercase tracking-huge text-white/50">
-          The Archive
-        </div>
-        <h2 className="font-display mb-12 text-center text-4xl font-light italic md:text-5xl">
-          Streets, faces, wild places
-        </h2>
-        <div className="grid grid-cols-3 gap-1.5 md:grid-cols-6">
-          {photos.slice(0, visible).map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => setLb(i)}
-              className="group relative aspect-square overflow-hidden bg-white/5"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={thumbSrc(p)}
-                alt={p.caption || "documentary"}
-                loading="lazy"
-                className="h-full w-full object-cover opacity-75 transition-all duration-500 group-hover:scale-105 group-hover:opacity-100"
-              />
-            </button>
-          ))}
-        </div>
-        {visible < photos.length && (
-          <div className="mt-10 text-center">
-            <button
-              onClick={() => setVisible((v) => v + 240)}
-              className="border border-white/25 px-8 py-3 text-[10px] uppercase tracking-huge text-white/60 transition-all hover:border-white hover:text-white"
-            >
-              Load more ({photos.length - visible} left)
-            </button>
-          </div>
-        )}
-      </section>
-
-      <Lightbox photos={photos} index={lb} onClose={() => setLb(null)} onMove={setLb} accent="#ffffff" />
-      <Footer />
-    </main>
+    <WorldShell
+      photos={photos}
+      accent="#ffffff"
+      eyebrow="Documentary & Street"
+      title="The Sphere"
+      sub="759 photographs from four continents, floating around you"
+      lb={lb}
+      setLb={setLb}
+      hovered={hov}
+    >
+      {photos.length > 0 && (
+        <World
+          photos={photos}
+          layout={layout}
+          onPick={setLb}
+          onHover={setHov}
+          startDistance={36}
+          minDistance={2}
+          maxDistance={48}
+          fogNear={22}
+          fogFar={74}
+          autoRotate={0.3}
+          dimOpacity={0.92}
+        />
+      )}
+    </WorldShell>
   );
 }
