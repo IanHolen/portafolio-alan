@@ -1,0 +1,2 @@
+-- (aplicada) page_views + admin_users + is_admin() + políticas RLS de admin
+-- Ver el historial de migraciones en Supabase; este archivo es el registro en el repo.

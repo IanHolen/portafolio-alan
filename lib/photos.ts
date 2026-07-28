@@ -6,10 +6,16 @@ const IMG_BASE = process.env.NEXT_PUBLIC_IMG_BASE || "/photos";
 const THUMB_BASE = process.env.NEXT_PUBLIC_THUMB_BASE || "/thumbs";
 
 export const imgSrc = (p: Pick<Photo, "storage_path">) =>
-  `${IMG_BASE}/${p.storage_path}`;
+  p.storage_path.startsWith("http")
+    ? p.storage_path
+    : `${IMG_BASE}/${p.storage_path}`;
 
 export const thumbSrc = (p: Pick<Photo, "storage_path">) =>
-  `${THUMB_BASE}/${p.storage_path.replace(/\.jpg$/, ".webp")}`;
+  p.storage_path.startsWith("http")
+    ? p.storage_path
+        .replace("/object/public/photos/", "/object/public/thumbs/")
+        .replace(/\.jpe?g$/i, ".webp")
+    : `${THUMB_BASE}/${p.storage_path.replace(/\.jpg$/, ".webp")}`;
 
 let capsCache: Record<string, { c: string; l: string }> | null = null;
 

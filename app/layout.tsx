@@ -10,6 +10,7 @@ import "@fontsource/inter/500.css";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import GalleryCursor from "@/components/GalleryCursor";
+import Tracker from "@/components/Tracker";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -32,6 +33,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-body grain">
         <GalleryCursor />
+        <Tracker />
         <Nav />
         {children}
       </body>
