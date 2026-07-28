@@ -16,6 +16,7 @@ export default function Nav() {
   const path = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const hidden = path?.startsWith("/admin");
 
   useEffect(() => {
     const f = () => setScrolled(window.scrollY > 40);
@@ -25,6 +26,8 @@ export default function Nav() {
   }, []);
 
   useEffect(() => setOpen(false), [path]);
+
+  if (hidden) return null;
 
   return (
     <header

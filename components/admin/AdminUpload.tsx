@@ -10,13 +10,14 @@ import { useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const CATS = [
-  { id: "weddings", label: "Weddings" },
-  { id: "hotels", label: "Hotels & Spaces" },
-  { id: "documentary", label: "Documentary & Street" },
-  { id: "prints", label: "Prints" },
+  { id: "weddings", label: "Weddings", thumb: "/thumbs/weddings/Blbfx4eBXmi.webp" },
+  { id: "hotels", label: "Hotels & Spaces", thumb: "/thumbs/hotels/CD108BVpqbl_001.webp" },
+  { id: "documentary", label: "Documentary & Street", thumb: "/thumbs/documentary/DaQPX4iAm0g_001.webp" },
+  { id: "prints", label: "Prints", thumb: "/thumbs/prints/BwZoXQLgW5x.webp" },
 ] as const;
 
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SB_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://udistfvjicapcfmyqwut.supabase.co";
 
 type Item = {
   file: File;
@@ -132,18 +133,36 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
         <div className="mb-3 text-[10px] uppercase tracking-wide2 text-[var(--fg-dim)]">
           1 · Choose the room
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {CATS.map((c) => (
             <button
               key={c.id}
               onClick={() => setCat(c.id)}
-              className={`border px-5 py-2.5 text-[10px] uppercase tracking-wide2 transition-all ${
+              className={`group relative aspect-[16/7] overflow-hidden border text-left transition-all ${
                 cat === c.id
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-black"
-                  : "border-[var(--line)] text-[var(--fg-dim)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  ? "border-[var(--accent)]"
+                  : "border-[var(--line)] opacity-60 hover:opacity-90"
               }`}
             >
-              {c.label}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={c.thumb}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover opacity-50 transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+              <div className="absolute bottom-2 left-3 right-2">
+                <div
+                  className={`text-[10px] uppercase tracking-wide2 ${cat === c.id ? "text-[var(--accent)]" : "text-white/80"}`}
+                >
+                  {c.label}
+                </div>
+              </div>
+              {cat === c.id && (
+                <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] text-black">
+                  ✓
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -190,6 +209,16 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
       {/* queue */}
       {items.length > 0 && (
         <div>
+          {busy && (
+            <div className="mb-4 h-1 w-full bg-white/5">
+              <div
+                className="h-1 bg-[var(--accent)] transition-all duration-500"
+                style={{
+                  width: `${(items.filter((i) => i.status === "done").length / items.length) * 100}%`,
+                }}
+              />
+            </div>
+          )}
           <div className="mb-3 flex items-center justify-between">
             <div className="text-[10px] uppercase tracking-wide2 text-[var(--fg-dim)]">
               3 · {items.length} in queue → {CATS.find((c) => c.id === cat)?.label}

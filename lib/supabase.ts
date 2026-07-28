@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Publishable values (safe in client bundles by design); env vars override.
+const url =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  "https://udistfvjicapcfmyqwut.supabase.co";
+const anon =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkaXN0ZnZqaWNhcGNmbXlxd3V0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMDg0NDUsImV4cCI6MjEwMDc4NDQ0NX0.9VryslT4Rsor1gjYSKsWZ19EnkvzcdMTO3ibAs9Mwlw";
 
 export const supabase = createClient(url, anon);
 
