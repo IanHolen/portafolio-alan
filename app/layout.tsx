@@ -11,6 +11,7 @@ import "./globals.css";
 import Nav from "@/components/Nav";
 import GalleryCursor from "@/components/GalleryCursor";
 import Tracker from "@/components/Tracker";
+import ContentGuard from "@/components/ContentGuard";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({
       <body className="font-body grain">
         <GalleryCursor />
         <Tracker />
+        <ContentGuard />
         <Nav />
         {children}
       </body>

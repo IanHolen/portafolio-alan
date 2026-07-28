@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { supabase, type Photo } from "@/lib/supabase";
+import { supabase, type Album, type Photo } from "@/lib/supabase";
 import { thumbSrc } from "@/lib/photos";
 import AdminUpload from "./AdminUpload";
 
 type View = { path: string; created_at: string };
 type Msg = { id: string; name: string; email: string; message: string; created_at: string };
-type Tab = "stats" | "upload" | "photos" | "inbox";
+type Tab = "stats" | "upload" | "photos" | "albums" | "inbox";
 
 const ROOMS: Record<string, { label: string; thumb: string }> = {
   "/": { label: "Landing", thumb: "/profile.jpg" },
@@ -123,6 +123,8 @@ export default function AdminDash({ email }: { email: string }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [tab, setTab] = useState<Tab>("stats");
   const [photoFilter, setPhotoFilter] = useState<string>("all");
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     const since = new Date(Date.now() - 30 * 86400e3).toISOString();
@@ -141,10 +143,15 @@ export default function AdminDash({ email }: { email: string }) {
       .then(({ data }) => setMsgs((data as Msg[]) || []));
     supabase
       .from("photos")
-      .select("id,code,filename,category,storage_path,width,height,caption,location,featured,sort_order")
+      .select("id,code,filename,category,storage_path,width,height,caption,location,featured,sort_order,source,album_slug,taken_at,media_type")
       .order("sort_order", { ascending: false })
       .limit(1500)
       .then(({ data }) => setPhotos((data as Photo[]) || []));
+    supabase
+      .from("albums")
+      .select("slug,title,event_date,category,created_at")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setAlbums((data as Album[]) || []));
   }, []);
 
   useEffect(reload, [reload]);
@@ -202,6 +209,7 @@ export default function AdminDash({ email }: { email: string }) {
     { id: "stats", label: "Analytics", glyph: "◐" },
     { id: "upload", label: "Upload", glyph: "↑" },
     { id: "photos", label: "Photos", glyph: "▦" },
+    { id: "albums", label: "Weddings", glyph: "◈", badge: albums.length || undefined },
     { id: "inbox", label: "Inbox", glyph: "✉", badge: msgs.length || undefined },
   ];
 
@@ -419,7 +427,7 @@ export default function AdminDash({ email }: { email: string }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={thumbSrc(p)} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[7px] uppercase tracking-wider text-white/60 opacity-0 transition-opacity group-hover:opacity-100">
-                    {p.category}
+                    {p.category}{p.source === "preview" ? " · preview" : ""}{p.media_type === "video" ? " · video" : ""}
                   </div>
                   <button
                     onClick={() => deletePhoto(p)}
@@ -430,6 +438,55 @@ export default function AdminDash({ email }: { email: string }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+
+        {/* ---------- ALBUMS (weddings) ---------- */}
+        {tab === "albums" && (
+          <div className="mt-8 space-y-3">
+            <div className="text-[10px] uppercase tracking-wide2 text-[var(--fg-dim)]">
+              Each wedding gets a private link you can send to the couple — it lives forever.
+              Create albums from the Upload tab.
+            </div>
+            {albums.length === 0 && (
+              <div className="text-xs font-light text-[var(--fg-dim)]">
+                No weddings yet — upload final wedding photos and create the first album.
+              </div>
+            )}
+            {albums.map((a) => {
+              const count = photos.filter((p) => p.album_slug === a.slug).length;
+              const url = `${typeof window !== "undefined" ? window.location.origin : ""}/w/${a.slug}`;
+              return (
+                <div key={a.slug} className="flex flex-wrap items-center justify-between gap-3 border border-[var(--line)] bg-gradient-to-b from-white/[0.02] to-transparent p-5">
+                  <div>
+                    <div className="font-display text-xl font-light italic">{a.title}</div>
+                    <div className="mt-0.5 text-[10px] text-[var(--fg-dim)]">
+                      {a.event_date || "no date"} · {count} media
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/w/${a.slug}`}
+                      target="_blank"
+                      className="border border-[var(--line)] px-4 py-2.5 text-[9px] uppercase tracking-wide2 text-[var(--fg-dim)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    >
+                      Open
+                    </a>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(url);
+                        setCopied(a.slug);
+                        setTimeout(() => setCopied(null), 1500);
+                      }}
+                      className="border border-[var(--accent)] px-4 py-2.5 text-[9px] uppercase tracking-wide2 text-[var(--accent)] transition-all hover:bg-[var(--accent)] hover:text-black"
+                    >
+                      {copied === a.slug ? "Copied ✓" : "Copy link"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

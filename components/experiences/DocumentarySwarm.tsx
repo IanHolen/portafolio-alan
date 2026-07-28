@@ -35,15 +35,12 @@ export default function DocumentarySwarm() {
 
     const N = picked.length;
     const GA = Math.PI * (3 - Math.sqrt(5));
-    // two shells only, well separated
+    // one clean shell — the sphere reads as a single calm object
     return picked.map(({ p, gi }, i) => {
-      const shell = i % 2;
-      const r = shell === 0 ? 17 : 24;
-      const k = Math.floor(i / 2);
-      const n = Math.ceil(N / 2);
-      const y = 1 - (k / Math.max(1, n - 1)) * 2;
+      const r = 21;
+      const y = 1 - (i / Math.max(1, N - 1)) * 2;
       const rad = Math.sqrt(Math.max(0, 1 - y * y));
-      const th = GA * k + shell * Math.PI; // offset shells so they interleave
+      const th = GA * i;
       const x = Math.cos(th) * rad * r;
       const z = Math.sin(th) * rad * r;
       const yy = y * r * 0.82;

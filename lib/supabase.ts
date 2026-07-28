@@ -22,6 +22,18 @@ export type Photo = {
   location: string | null;
   featured: boolean;
   sort_order: number;
+  source?: 'preview' | 'final';
+  album_slug?: string | null;
+  taken_at?: string | null;
+  media_type?: 'photo' | 'video';
+};
+
+export type Album = {
+  slug: string;
+  title: string;
+  event_date: string | null;
+  category: string;
+  created_at?: string;
 };
 
 export const photoUrl = (path: string) =>

@@ -30,20 +30,32 @@ async function loadCaptions() {
   return capsCache!;
 }
 
+const COLS =
+  "id,code,filename,category,storage_path,width,height,caption,location,featured,sort_order,source,album_slug,taken_at,media_type";
+
 async function fetchFromDb(category?: Photo["category"]): Promise<Photo[]> {
   let q = supabase
     .from("photos")
-    .select(
-      "id,code,filename,category,storage_path,width,height,caption,location,featured,sort_order"
-    )
+    .select(COLS)
     .order("sort_order", { ascending: true })
-    .limit(1200);
+    .limit(1500);
   if (category) q = q.eq("category", category);
   const { data, error } = await q;
   if (error) throw error;
   const rows = (data ?? []) as Photo[];
   if (!rows.length) throw new Error("empty");
-  return rows;
+  // Fresh-start logic: as soon as a category has FINAL content, its
+  // preview (Instagram) photos are hidden automatically.
+  if (category) {
+    const finals = rows.filter((p) => p.source === "final");
+    return finals.length ? finals : rows;
+  }
+  const finalCats = new Set(
+    rows.filter((p) => p.source === "final").map((p) => p.category)
+  );
+  return rows.filter((p) =>
+    finalCats.has(p.category) ? p.source === "final" : true
+  );
 }
 
 async function fetchFromManifest(category?: Photo["category"]): Promise<Photo[]> {
@@ -85,3 +97,38 @@ export function hash01(s: string, salt = 0): number {
   }
   return ((h >>> 0) % 10000) / 10000;
 }
+
+/* ---------- wedding albums ---------- */
+
+import type { Album } from "./supabase";
+
+export async function fetchAlbums(): Promise<Album[]> {
+  const { data } = await supabase
+    .from("albums")
+    .select("slug,title,event_date,category,created_at")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as Album[];
+}
+
+export async function fetchAlbum(slug: string) {
+  const [{ data: album }, { data: photos }] = await Promise.all([
+    supabase.from("albums").select("*").eq("slug", slug).maybeSingle(),
+    supabase
+      .from("photos")
+      .select(
+        "id,code,filename,category,storage_path,width,height,caption,location,featured,sort_order,source,album_slug,taken_at,media_type"
+      )
+      .eq("album_slug", slug)
+      .order("sort_order", { ascending: true }),
+  ]);
+  return { album: (album as Album) || null, photos: (photos ?? []) as Photo[] };
+}
+
+export const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);

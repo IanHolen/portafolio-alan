@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * WEDDINGS — "The Orbit" (v2)
- * Five clean bands of photographs circle you like rings of a carousel,
- * each band turning at its own speed — some clockwise, some counter.
- * Uniform heights and computed spacing: airy, ordered, alive.
+ * WEDDINGS — "The Orbit" (v3)
+ * Every ring is ONE wedding. Final albums (curated by Alan) each get
+ * their own band; while only Instagram previews exist, posts act as
+ * pseudo-albums. A side index lists the weddings — final albums link
+ * to their private couple page (/w/slug).
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
-import type { Photo } from "@/lib/supabase";
-import { fetchPhotos } from "@/lib/photos";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Album, Photo } from "@/lib/supabase";
+import { fetchPhotos, fetchAlbums } from "@/lib/photos";
 import WorldShell from "./WorldShell";
 import type { WorldNode } from "./World";
 import { SITE } from "@/lib/site";
@@ -18,68 +19,82 @@ import { SITE } from "@/lib/site";
 const World = dynamic(() => import("./World"), { ssr: false });
 
 const ACCENT = "#caa87c";
-
-// [radius, y, angular speed (rad/s), photo height]
-const BANDS: [number, number, number, number][] = [
-  [17.5, 7.2, 0.020, 2.6],
-  [14.5, 3.6, -0.014, 2.9],
+const MAX_BANDS = 6;
+// [radius, y, speed, photo height]
+const BAND_GEO: [number, number, number, number][] = [
   [13.0, 0.0, 0.010, 3.2],
-  [14.5, -3.6, -0.017, 2.9],
-  [17.5, -7.2, 0.023, 2.6],
+  [14.5, 3.6, -0.014, 2.9],
+  [14.5, -3.6, 0.017, 2.9],
+  [17.5, 7.2, 0.020, 2.6],
+  [17.5, -7.2, -0.023, 2.6],
+  [20.5, 0.2, 0.008, 2.7],
 ];
-const GAP = 1.6; // world units between photos along the band
+const GAP = 1.6;
 
 export default function WeddingFilm() {
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
   const [lb, setLb] = useState<number | null>(null);
   const [hov, setHov] = useState<Photo | null>(null);
 
   useEffect(() => {
     fetchPhotos("weddings").then(setPhotos).catch(console.error);
+    fetchAlbums().then(setAlbums).catch(() => {});
   }, []);
 
-  const layout = useCallback((all: Photo[]): WorldNode[] => {
-    const nodes: WorldNode[] = [];
-    let idx = 0;
-    for (const [r, y, speed, h] of BANDS) {
-      if (idx >= all.length) break;
-      // measure how many photos fit on this band without crowding
-      const circumference = 2 * Math.PI * r;
-      const widths: number[] = [];
-      let used = 0;
-      let probe = idx;
-      while (probe < all.length) {
-        const p = all[probe];
-        const w = h * ((p.width || 1440) / (p.height || 960));
-        if (used + w + GAP > circumference) break;
-        widths.push(w);
-        used += w + GAP;
-        probe++;
-      }
-      const n = widths.length;
-      if (n === 0) break;
-      // distribute remaining slack evenly
-      const slack = (circumference - used) / n;
-      let arc = 0;
-      for (let j = 0; j < n; j++, idx++) {
-        const p = all[idx];
-        const w = widths[j];
-        const centerArc = arc + w / 2;
-        const phase = (centerArc / circumference) * Math.PI * 2;
-        arc += w + GAP + slack;
-        nodes.push({
-          photo: p,
-          index: idx,
-          pos: [Math.cos(phase) * r, y, Math.sin(phase) * r],
-          rot: [0, Math.atan2(Math.cos(phase) * r, Math.sin(phase) * r) + Math.PI, 0],
-          w,
-          h,
-          orbit: { r, y, speed, phase },
-        });
-      }
+  // group photos into weddings: album_slug (finals) or post code (previews)
+  const groups = useMemo(() => {
+    const m = new Map<string, Photo[]>();
+    for (const p of photos) {
+      const key = p.album_slug || p.code;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(p);
     }
-    return nodes;
-  }, []);
+    return [...m.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, MAX_BANDS);
+  }, [photos]);
+
+  const isFinal = photos.some((p) => p.source === "final");
+
+  const layout = useCallback(
+    (all: Photo[]): WorldNode[] => {
+      const nodes: WorldNode[] = [];
+      groups.forEach(([, groupPhotos], gi) => {
+        const [r, y, speed, h] = BAND_GEO[gi % BAND_GEO.length];
+        const circumference = 2 * Math.PI * r;
+        const widths: number[] = [];
+        let used = 0;
+        for (const p of groupPhotos) {
+          const w = h * ((p.width || 1440) / (p.height || 960));
+          if (used + w + GAP > circumference) break;
+          widths.push(w);
+          used += w + GAP;
+        }
+        const n = widths.length;
+        if (!n) return;
+        const slack = (circumference - used) / n;
+        let arc = 0;
+        for (let j = 0; j < n; j++) {
+          const p = groupPhotos[j];
+          const w = widths[j];
+          const phase = ((arc + w / 2) / circumference) * Math.PI * 2 + gi * 0.9;
+          arc += w + GAP + slack;
+          nodes.push({
+            photo: p,
+            index: all.indexOf(p),
+            pos: [Math.cos(phase) * r, y, Math.sin(phase) * r],
+            rot: [0, 0, 0],
+            w,
+            h,
+            orbit: { r, y, speed, phase },
+          });
+        }
+      });
+      return nodes;
+    },
+    [groups]
+  );
 
   return (
     <WorldShell
@@ -87,7 +102,11 @@ export default function WeddingFilm() {
       accent={ACCENT}
       eyebrow="ziggyweddings"
       title="The Orbit"
-      sub="The whole day circles around you — grab it, spin it, step inside"
+      sub={
+        isFinal
+          ? "Every ring is one wedding — grab the day, spin it, step inside"
+          : "Every ring is one wedding · preview collection"
+      }
       cta={{ label: "Book your wedding", href: SITE.whatsappUrl }}
       lb={lb}
       setLb={setLb}
@@ -109,6 +128,31 @@ export default function WeddingFilm() {
           autoRotate={0.25}
           dimOpacity={0.96}
         />
+      )}
+
+      {/* wedding index — final albums link to their private page */}
+      {isFinal && albums.length > 0 && (
+        <div className="absolute left-5 top-24 z-20 max-w-[220px]">
+          <div className="mb-3 text-[9px] uppercase tracking-huge text-white/35">
+            The weddings
+          </div>
+          <div className="space-y-2">
+            {albums.slice(0, 10).map((a) => (
+              <a
+                key={a.slug}
+                href={`/w/${a.slug}`}
+                className="block border-l border-white/15 pl-3 text-[11px] font-light text-white/60 transition-all hover:border-[#caa87c] hover:pl-4 hover:text-[#caa87c]"
+              >
+                {a.title}
+                {a.event_date && (
+                  <span className="ml-2 text-[9px] text-white/30">
+                    {new Date(a.event_date + "T12:00:00").getFullYear()}
+                  </span>
+                )}
+              </a>
+            ))}
+          </div>
+        </div>
       )}
     </WorldShell>
   );

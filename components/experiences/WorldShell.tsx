@@ -93,7 +93,7 @@ export default function WorldShell({
       <div className="absolute right-5 top-16 z-20 flex flex-col items-end gap-2 md:top-20">
         <button
           onClick={() => setGrid(true)}
-          className="border border-white/20 bg-black/40 px-4 py-2 text-[9px] uppercase tracking-wide2 text-white/60 backdrop-blur transition-all hover:border-white/60 hover:text-white"
+          className="border border-white/25 bg-black/50 px-6 py-3 text-[11px] uppercase tracking-wide2 text-white/70 backdrop-blur transition-all hover:border-white hover:text-white"
         >
           Grid view
         </button>
@@ -102,10 +102,16 @@ export default function WorldShell({
             href={cta.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="border bg-black/40 px-4 py-2 text-[9px] uppercase tracking-wide2 backdrop-blur transition-all hover:text-black"
+            className="border bg-black/50 px-6 py-3 text-[11px] uppercase tracking-wide2 backdrop-blur transition-all"
             style={{ borderColor: accent, color: accent }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = accent)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.4)")}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = accent;
+              e.currentTarget.style.color = "#000";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(0,0,0,0.5)";
+              e.currentTarget.style.color = accent;
+            }}
           >
             {cta.label}
           </a>
@@ -127,7 +133,7 @@ export default function WorldShell({
             Next room
           </span>
           <span
-            className="mt-1 block text-[11px] uppercase tracking-wide2 text-white/60 transition-all group-hover:translate-x-1"
+            className="mt-1 block text-[13px] uppercase tracking-wide2 transition-all group-hover:translate-x-1"
             style={{ color: accent }}
           >
             {next.label} →
@@ -137,14 +143,14 @@ export default function WorldShell({
 
       {/* grid overlay */}
       {grid && (
-        <div className="absolute inset-0 z-30 overflow-y-auto bg-black/95 backdrop-blur">
+        <div className="absolute inset-0 z-[80] overflow-y-auto bg-black/95 backdrop-blur">
           <div className="sticky top-0 z-10 flex items-center justify-between bg-black/80 px-5 py-4 backdrop-blur">
             <div className="text-[10px] uppercase tracking-huge" style={{ color: accent }}>
               {title} — all photographs
             </div>
             <button
               onClick={() => setGrid(false)}
-              className="text-2xl font-light text-white/60 hover:text-white"
+              className="px-4 py-1 text-4xl font-light text-white/70 hover:text-white"
             >
               ×
             </button>

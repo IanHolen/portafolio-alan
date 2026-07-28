@@ -13,7 +13,7 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Photo } from "@/lib/supabase";
-import { thumbSrc } from "@/lib/photos";
+import { thumbSrc, imgSrc as imgFullSrc } from "@/lib/photos";
 
 export type WorldNode = {
   photo: Photo;
@@ -68,6 +68,7 @@ function PhotoPlane({
   const [tex, setTex] = useState<THREE.Texture | null>(null);
   const mesh = useRef<THREE.Mesh>(null);
   const mat = useRef<THREE.MeshBasicMaterial>(null);
+  const backMat = useRef<THREE.MeshBasicMaterial>(null);
   const [hover, setHover] = useState(false);
   const fade = useRef(0);
   const fly = useRef(0); // 0 = at home, 1 = at camera
@@ -81,14 +82,34 @@ function PhotoPlane({
 
   useEffect(() => {
     let alive = true;
-    new THREE.TextureLoader().load(thumbSrc(node.photo), (t) => {
-      if (!alive) return;
+    let video: HTMLVideoElement | null = null;
+    if (node.photo.media_type === "video") {
+      // live-playing video plane
+      video = document.createElement("video");
+      video.src = imgFullSrc(node.photo);
+      video.crossOrigin = "anonymous";
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.play().catch(() => {});
+      const t = new THREE.VideoTexture(video);
       t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 4;
       setTex(t);
-    });
+    } else {
+      new THREE.TextureLoader().load(thumbSrc(node.photo), (t) => {
+        if (!alive) return;
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 4;
+        setTex(t);
+      });
+    }
     return () => {
       alive = false;
+      if (video) {
+        video.pause();
+        video.src = "";
+      }
     };
   }, [node.photo]);
 
@@ -100,7 +121,9 @@ function PhotoPlane({
 
     // fade in
     if (tex && fade.current < 1) fade.current = Math.min(1, fade.current + delta * 1.2);
-    if (mat.current) mat.current.opacity = fade.current * (hover || isFocused ? 1 : dimOpacity);
+    const op = fade.current * (hover || isFocused ? 1 : dimOpacity);
+    if (mat.current) mat.current.opacity = op;
+    if (backMat.current) backMat.current.opacity = op;
 
     // home position (static / orbiting / drifting)
     let hx = node.pos[0],
@@ -180,9 +203,21 @@ function PhotoPlane({
         map={tex}
         transparent
         opacity={0}
-        side={THREE.DoubleSide}
+        side={THREE.FrontSide}
         toneMapped={false}
       />
+      {/* back face rendered separately so the image is never mirrored */}
+      <mesh rotation={[0, Math.PI, 0]} position={[0, 0, -0.005]}>
+        <planeGeometry args={[node.w, node.h]} />
+        <meshBasicMaterial
+          ref={backMat}
+          map={tex}
+          transparent
+          opacity={0}
+          side={THREE.FrontSide}
+          toneMapped={false}
+        />
+      </mesh>
       {node.frame && (
         <mesh position={[0, 0, -0.02]}>
           <planeGeometry args={[node.w + 0.35, node.h + 0.35]} />
