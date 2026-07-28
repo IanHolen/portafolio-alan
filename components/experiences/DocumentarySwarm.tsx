@@ -70,6 +70,7 @@ export default function DocumentarySwarm() {
       lb={lb}
       setLb={setLb}
       hovered={hov}
+      next={{ href: "/prints", label: "Prints" }}
     >
       {photos.length > 0 && (
         <World

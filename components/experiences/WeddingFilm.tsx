@@ -92,6 +92,7 @@ export default function WeddingFilm() {
       lb={lb}
       setLb={setLb}
       hovered={hov}
+      next={{ href: "/hotels", label: "Hotels & Spaces" }}
     >
       {photos.length > 0 && (
         <World

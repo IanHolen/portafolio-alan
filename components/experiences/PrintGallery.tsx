@@ -93,6 +93,7 @@ export default function PrintGallery() {
         lb={lb}
         setLb={setLb}
         hovered={hov}
+        next={{ href: "/weddings", label: "Weddings" }}
       >
         {photos.length > 0 && (
           <World
@@ -110,6 +111,7 @@ export default function PrintGallery() {
             minPolar={Math.PI / 2 - 0.55}
             maxPolar={Math.PI / 2 + 0.55}
             dimOpacity={1}
+            floor={{ y: -5.4, radius: 22 }}
           />
         )}
       </WorldShell>

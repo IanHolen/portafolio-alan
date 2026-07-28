@@ -60,6 +60,7 @@ export default function HotelSpaces() {
       lb={lb}
       setLb={setLb}
       hovered={hov}
+      next={{ href: "/documentary", label: "Documentary" }}
     >
       {photos.length > 0 && (
         <World

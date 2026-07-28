@@ -22,6 +22,7 @@ export default function WorldShell({
   lb,
   setLb,
   hovered,
+  next,
 }: {
   photos: Photo[];
   accent: string;
@@ -33,6 +34,7 @@ export default function WorldShell({
   lb: number | null;
   setLb: (i: number | null) => void;
   hovered?: Photo | null;
+  next?: { href: string; label: string };
 }) {
   const [grid, setGrid] = useState(false);
   const [introGone, setIntroGone] = useState(false);
@@ -114,6 +116,24 @@ export default function WorldShell({
       <div className="pointer-events-none absolute bottom-5 right-5 z-10 font-mono text-[9px] tracking-widest text-white/30">
         {photos.length} PHOTOGRAPHS
       </div>
+
+      {/* next room */}
+      {next && (
+        <a
+          href={next.href}
+          className="group absolute bottom-12 right-5 z-20 text-right"
+        >
+          <span className="block text-[8px] uppercase tracking-huge text-white/30 transition-colors group-hover:text-white/60">
+            Next room
+          </span>
+          <span
+            className="mt-1 block text-[11px] uppercase tracking-wide2 text-white/60 transition-all group-hover:translate-x-1"
+            style={{ color: accent }}
+          >
+            {next.label} →
+          </span>
+        </a>
+      )}
 
       {/* grid overlay */}
       {grid && (

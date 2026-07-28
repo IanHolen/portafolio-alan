@@ -1,7 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { SITE } from "@/lib/site";
+
+const HeroRing = dynamic(() => import("./HeroRing"), { ssr: false });
 
 export default function HomeHero() {
   const [ready, setReady] = useState(false);
@@ -16,6 +19,7 @@ export default function HomeHero() {
 
   return (
     <section className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-6">
+      <HeroRing />
       {/* soft brass glow behind everything */}
       <div className="pointer-events-none absolute left-1/2 top-[38%] h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(200,162,74,0.10),transparent_65%)]" />
 

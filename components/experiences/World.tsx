@@ -2,13 +2,14 @@
 
 /**
  * World — shared interactive 3D photo-space engine.
- * Drag to orbit, wheel/pinch to dive, hover to focus, click to open.
- * Nodes can be static (pos) or orbiting (orbit: each photo circles the
- * center at its own radius/height/speed — rings can counter-rotate).
+ * Drag to orbit, wheel/pinch to dive, hover to focus, click and the
+ * photograph FLIES to you before opening. Optional mirror floor,
+ * cinematic bloom, drifting dust, orbiting nodes.
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, MeshReflectorMaterial } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Photo } from "@/lib/supabase";
@@ -16,16 +17,13 @@ import { thumbSrc } from "@/lib/photos";
 
 export type WorldNode = {
   photo: Photo;
-  index: number; // index into full photo list (lightbox)
+  index: number;
   pos: [number, number, number];
   rot: [number, number, number];
   w: number;
   h: number;
-  /** no idle drift (gallery walls) */
   pinned?: boolean;
-  /** museum frame color behind the photo */
   frame?: string;
-  /** orbit the world center: overrides pos over time */
   orbit?: { r: number; y: number; speed: number; phase: number };
 };
 
@@ -45,25 +43,41 @@ export type WorldProps = {
   maxPolar?: number;
   dimOpacity?: number;
   dust?: boolean;
+  bloom?: boolean;
+  /** dark mirror floor (museum) */
+  floor?: { y: number; radius: number };
 };
+
+type FocusState = { id: string; started: number } | null;
 
 function PhotoPlane({
   node,
   onPick,
   onHover,
   dimOpacity,
+  focus,
+  setFocus,
 }: {
   node: WorldNode;
   onPick: (i: number) => void;
   onHover?: (p: Photo | null) => void;
   dimOpacity: number;
+  focus: React.MutableRefObject<FocusState>;
+  setFocus: (f: FocusState) => void;
 }) {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
   const mesh = useRef<THREE.Mesh>(null);
   const mat = useRef<THREE.MeshBasicMaterial>(null);
   const [hover, setHover] = useState(false);
   const fade = useRef(0);
+  const fly = useRef(0); // 0 = at home, 1 = at camera
   const seed = useMemo(() => (node.index * 2654435761) % 1000, [node.index]);
+  const tmpV = useMemo(() => new THREE.Vector3(), []);
+  const tmpQ = useMemo(() => new THREE.Quaternion(), []);
+  const homeQ = useMemo(
+    () => new THREE.Quaternion().setFromEuler(new THREE.Euler(...node.rot)),
+    [node.rot]
+  );
 
   useEffect(() => {
     let alive = true;
@@ -78,35 +92,58 @@ function PhotoPlane({
     };
   }, [node.photo]);
 
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock, camera }, delta) => {
     const m = mesh.current;
     if (!m) return;
     const t = clock.elapsedTime;
+    const isFocused = focus.current?.id === node.photo.id;
 
-    // gentle scale focus
-    const target = hover ? 1.16 : 1;
-    m.scale.x += (target - m.scale.x) * 0.12;
-    m.scale.y += (target - m.scale.y) * 0.12;
+    // fade in
+    if (tex && fade.current < 1) fade.current = Math.min(1, fade.current + delta * 1.2);
+    if (mat.current) mat.current.opacity = fade.current * (hover || isFocused ? 1 : dimOpacity);
 
-    // fade in when texture arrives
-    if (tex && fade.current < 1) {
-      fade.current = Math.min(1, fade.current + delta * 1.2);
-    }
-    if (mat.current) {
-      mat.current.opacity = fade.current * (hover ? 1 : dimOpacity);
-    }
-
+    // home position (static / orbiting / drifting)
+    let hx = node.pos[0],
+      hy = node.pos[1],
+      hz = node.pos[2];
+    let hq = homeQ;
     if (node.orbit) {
       const { r, y, speed, phase } = node.orbit;
       const a = phase + t * speed;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      m.position.set(x, y + Math.sin(t * 0.18 + seed) * 0.12, z);
-      m.rotation.set(0, Math.atan2(x, z) + Math.PI, 0);
+      hx = Math.cos(a) * r;
+      hz = Math.sin(a) * r;
+      hy = y + Math.sin(t * 0.18 + seed) * 0.12;
+      hq = tmpQ.setFromEuler(new THREE.Euler(0, Math.atan2(hx, hz) + Math.PI, 0));
     } else if (!node.pinned) {
-      m.position.y = node.pos[1] + Math.sin(t * 0.2 + seed) * 0.22;
-      m.rotation.z = node.rot[2] + Math.sin(t * 0.14 + seed) * 0.02;
+      hy = node.pos[1] + Math.sin(t * 0.2 + seed) * 0.22;
     }
+
+    // fly to camera when focused
+    fly.current += ((isFocused ? 1 : 0) - fly.current) * (isFocused ? 0.14 : 0.1);
+    const f = fly.current;
+    if (f > 0.001) {
+      const dist = 3.2;
+      camera.getWorldDirection(tmpV);
+      const target = tmpV.multiplyScalar(dist).add(camera.position);
+      m.position.set(
+        hx + (target.x - hx) * f,
+        hy + (target.y - hy) * f,
+        hz + (target.z - hz) * f
+      );
+      const camQ = camera.quaternion;
+      m.quaternion.copy(hq).slerp(camQ, f);
+      m.renderOrder = 10;
+    } else {
+      m.position.set(hx, hy, hz);
+      m.quaternion.copy(hq);
+      if (!node.orbit && !node.pinned) m.rotation.z = node.rot[2] + Math.sin(t * 0.14 + seed) * 0.02;
+      m.renderOrder = 0;
+    }
+
+    // scale
+    const targetS = isFocused ? 1.5 : hover ? 1.14 : 1;
+    m.scale.x += (targetS - m.scale.x) * 0.12;
+    m.scale.y += (targetS - m.scale.y) * 0.12;
   });
 
   if (!tex) return null;
@@ -118,7 +155,12 @@ function PhotoPlane({
       rotation={node.rot}
       onClick={(e) => {
         e.stopPropagation();
-        onPick(node.index);
+        if (focus.current) return;
+        setFocus({ id: node.photo.id, started: performance.now() });
+        setTimeout(() => {
+          onPick(node.index);
+          setFocus(null);
+        }, 620);
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -151,7 +193,6 @@ function PhotoPlane({
   );
 }
 
-/** faint drifting dust for depth */
 function Dust() {
   const ref = useRef<THREE.Points>(null);
   const geo = useMemo(() => {
@@ -160,9 +201,8 @@ function Dust() {
     for (let i = 0; i < N; i++) {
       const r = 10 + Math.random() * 45;
       const th = Math.random() * Math.PI * 2;
-      const y = (Math.random() - 0.5) * 40;
       pos[i * 3] = Math.cos(th) * r;
-      pos[i * 3 + 1] = y;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 40;
       pos[i * 3 + 2] = Math.sin(th) * r;
     }
     const g = new THREE.BufferGeometry();
@@ -176,6 +216,27 @@ function Dust() {
     <points ref={ref} geometry={geo}>
       <pointsMaterial size={0.06} color="#8a8578" transparent opacity={0.35} sizeAttenuation />
     </points>
+  );
+}
+
+function MirrorFloor({ y, radius }: { y: number; radius: number }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, 0]}>
+      <circleGeometry args={[radius, 64]} />
+      <MeshReflectorMaterial
+        blur={[280, 80]}
+        resolution={1024}
+        mixBlur={0.9}
+        mixStrength={0.55}
+        roughness={0.85}
+        depthScale={1.1}
+        minDepthThreshold={0.4}
+        maxDepthThreshold={1.3}
+        color="#0a0908"
+        metalness={0.4}
+        mirror={0.6}
+      />
+    </mesh>
   );
 }
 
@@ -212,9 +273,19 @@ export default function World(props: WorldProps) {
     maxPolar = Math.PI - 0.35,
     dimOpacity = 0.92,
     dust = true,
+    bloom = true,
+    floor,
   } = props;
 
   const nodes = useMemo(() => layout(photos), [photos, layout]);
+  const focusRef = useRef<FocusState>(null);
+  const setFocus = (f: FocusState) => {
+    focusRef.current = f;
+  };
+  const [smallScreen, setSmallScreen] = useState(false);
+  useEffect(() => {
+    setSmallScreen(window.matchMedia("(max-width: 768px)").matches);
+  }, []);
 
   return (
     <Canvas
@@ -227,6 +298,7 @@ export default function World(props: WorldProps) {
       <fog attach="fog" args={[background, fogNear, fogFar]} />
       <IntroDolly start={startDistance} />
       {dust && <Dust />}
+      {floor && <MirrorFloor y={floor.y} radius={floor.radius} />}
       {nodes.map((n) => (
         <PhotoPlane
           key={n.photo.id}
@@ -234,6 +306,8 @@ export default function World(props: WorldProps) {
           onPick={onPick}
           onHover={onHover}
           dimOpacity={dimOpacity}
+          focus={focusRef}
+          setFocus={setFocus}
         />
       ))}
       <OrbitControls
@@ -249,6 +323,11 @@ export default function World(props: WorldProps) {
         minPolarAngle={minPolar}
         maxPolarAngle={maxPolar}
       />
+      {bloom && !smallScreen && (
+        <EffectComposer>
+          <Bloom intensity={0.28} luminanceThreshold={0.55} luminanceSmoothing={0.3} mipmapBlur />
+        </EffectComposer>
+      )}
     </Canvas>
   );
 }
