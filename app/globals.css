@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #070707;
+  --bg-2: #0d0d0d;
+  --fg: #f2efe9;
+  --fg-dim: #9a958c;
+  --accent: #c8a24a; /* warm brass */
+  --line: rgba(242, 239, 233, 0.14);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--accent);
+  color: #000;
+}
+
+/* thin elegant scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #2c2a26; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4a463f; }
+
+.font-display {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+.font-body {
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.tracking-huge { letter-spacing: 0.35em; }
+.tracking-wide2 { letter-spacing: 0.18em; }
+
+/* film grain overlay */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: -100%;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  animation: grain-shift 0.9s steps(4) infinite;
+}
+@keyframes grain-shift {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-2%, 1%); }
+  50% { transform: translate(1%, -2%); }
+  75% { transform: translate(-1%, 2%); }
+  100% { transform: translate(2%, -1%); }
+}
+
+/* reveal on scroll helper */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* image protection-ish */
+img { -webkit-user-drag: none; user-select: none; }
