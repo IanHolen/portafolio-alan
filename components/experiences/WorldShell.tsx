@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Photo } from "@/lib/supabase";
 import { thumbSrc } from "@/lib/photos";
 import Lightbox from "@/components/Lightbox";
@@ -38,11 +39,21 @@ export default function WorldShell({
 }) {
   const [grid, setGrid] = useState(false);
   const [introGone, setIntroGone] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const t = setTimeout(() => setIntroGone(true), 4200);
     return () => clearTimeout(t);
   }, []);
+
+  // close grid on Escape
+  useEffect(() => {
+    if (!grid) return;
+    const f = (e: KeyboardEvent) => e.key === "Escape" && setGrid(false);
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  }, [grid]);
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-black">
@@ -50,6 +61,17 @@ export default function WorldShell({
 
       {/* cinematic vignette */}
       <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_52%,rgba(0,0,0,0.55)_100%)]" />
+
+      {/* faint tiled watermark — any screenshot or screen-recording of the
+          experience carries the author's name */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[5] opacity-[0.05]"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='210'%3E%3Ctext x='0' y='110' transform='rotate(-30 0 110)' fill='white' font-family='Georgia' font-size='17' font-style='italic'%3EAlan Kugelmass%3C/text%3E%3C/svg%3E\")",
+        }}
+      />
 
       {/* hover label — location/caption of the photo under the cursor */}
       <div
@@ -79,21 +101,22 @@ export default function WorldShell({
           <div className="text-[10px] uppercase tracking-huge" style={{ color: accent }}>
             {eyebrow}
           </div>
-          <h1 className="font-display mt-3 text-5xl font-light italic md:text-7xl">{title}</h1>
+          <h1 className="font-display mt-3 text-4xl font-light italic md:text-7xl">{title}</h1>
           <div className="mt-3 text-[11px] font-light text-white/50">{sub}</div>
         </div>
       </div>
 
       {/* control hints */}
-      <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap text-[9px] uppercase tracking-wide2 text-white/35">
-        Drag to explore · scroll to dive · click a photo to open
+      <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 w-full -translate-x-1/2 px-4 text-center text-[8px] uppercase tracking-wide2 text-white/35 md:w-auto md:whitespace-nowrap md:text-[9px]">
+        <span className="md:hidden">Drag to explore · pinch to dive · tap a photo</span>
+        <span className="hidden md:inline">Drag to explore · scroll to dive · click a photo to open</span>
       </div>
 
       {/* top-right actions */}
-      <div className="absolute right-5 top-16 z-20 flex flex-col items-end gap-2 md:top-20">
+      <div className="absolute right-3 top-14 z-20 flex flex-col items-end gap-2 md:right-5 md:top-20">
         <button
           onClick={() => setGrid(true)}
-          className="border border-white/25 bg-black/50 px-6 py-3 text-[11px] uppercase tracking-wide2 text-white/70 backdrop-blur transition-all hover:border-white hover:text-white"
+          className="border border-white/25 bg-black/50 px-4 py-2.5 text-[10px] uppercase tracking-wide2 text-white/70 backdrop-blur transition-all hover:border-white hover:text-white md:px-6 md:py-3 md:text-[11px]"
         >
           Grid view
         </button>
@@ -102,7 +125,7 @@ export default function WorldShell({
             href={cta.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="border bg-black/50 px-6 py-3 text-[11px] uppercase tracking-wide2 backdrop-blur transition-all"
+            className="border bg-black/50 px-4 py-2.5 text-[10px] uppercase tracking-wide2 backdrop-blur transition-all md:px-6 md:py-3 md:text-[11px]"
             style={{ borderColor: accent, color: accent }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = accent;
@@ -119,7 +142,7 @@ export default function WorldShell({
       </div>
 
       {/* photo count */}
-      <div className="pointer-events-none absolute bottom-5 right-5 z-10 font-mono text-[9px] tracking-widest text-white/30">
+      <div className="pointer-events-none absolute bottom-5 right-5 z-10 hidden font-mono text-[9px] tracking-widest text-white/30 md:block">
         {photos.length} PHOTOGRAPHS
       </div>
 
@@ -141,39 +164,51 @@ export default function WorldShell({
         </a>
       )}
 
-      {/* grid overlay */}
-      {grid && (
-        <div className="absolute inset-0 z-[80] overflow-y-auto bg-black/95 backdrop-blur">
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-black/80 px-5 py-4 backdrop-blur">
-            <div className="text-[10px] uppercase tracking-huge" style={{ color: accent }}>
-              {title} — all photographs
-            </div>
-            <button
-              onClick={() => setGrid(false)}
-              className="px-4 py-1 text-4xl font-light text-white/70 hover:text-white"
-            >
-              ×
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5 p-3 md:grid-cols-6">
-            {photos.map((p, i) => (
+      {/* grid overlay — portaled to <body> so it sits above the nav */}
+      {mounted &&
+        grid &&
+        createPortal(
+          <div className="fixed inset-0 z-[130] overflow-y-auto bg-black/97 backdrop-blur">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-black/85 px-6 py-5 backdrop-blur">
+              <div className="text-[11px] uppercase tracking-huge" style={{ color: accent }}>
+                {title} — all photographs
+              </div>
               <button
-                key={p.id}
-                onClick={() => setLb(i)}
-                className="group relative aspect-square overflow-hidden bg-white/5"
+                onClick={() => setGrid(false)}
+                aria-label="Close"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 text-3xl font-light text-white/80 transition-all hover:border-white hover:text-white"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbSrc(p)}
-                  alt={p.caption || ""}
-                  loading="lazy"
-                  className="h-full w-full object-cover opacity-75 transition-all duration-500 group-hover:scale-105 group-hover:opacity-100"
-                />
+                ×
               </button>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 p-3 md:grid-cols-6">
+              {photos.map((p, i) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setGrid(false);
+                    setLb(i);
+                  }}
+                  className="group relative aspect-square overflow-hidden bg-white/5"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={thumbSrc(p)}
+                    alt={p.caption || ""}
+                    loading="lazy"
+                    className="h-full w-full object-cover opacity-75 transition-all duration-500 group-hover:scale-105 group-hover:opacity-100"
+                  />
+                  {p.media_type === "video" && (
+                    <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[10px] text-white">
+                      ▶
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
 
       <Lightbox photos={photos} index={lb} onClose={() => setLb(null)} onMove={setLb} accent={accent} />
     </main>

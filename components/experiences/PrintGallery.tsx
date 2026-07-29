@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import type { Photo } from "@/lib/supabase";
 import { fetchPhotos, imgSrc } from "@/lib/photos";
+import { fetchCategoryExperience, type ExperienceDef } from "@/lib/layouts";
 import WorldShell from "./WorldShell";
 import type { WorldNode } from "./World";
 
@@ -23,12 +24,14 @@ export default function PrintGallery() {
   const [lb, setLb] = useState<number | null>(null);
   const [sel, setSel] = useState<Photo | null>(null);
   const [hov, setHov] = useState<Photo | null>(null);
+  const [exp, setExp] = useState<ExperienceDef | null>(null);
 
   useEffect(() => {
     fetchPhotos("prints").then(setPhotos).catch(console.error);
+    fetchCategoryExperience("prints").then(setExp).catch(() => {});
   }, []);
 
-  const layout = useCallback((all: Photo[]): WorldNode[] => {
+  const defaultLayout = useCallback((all: Photo[]): WorldNode[] => {
     // museum hang: two perfectly level rails, spacing measured so frames
     // never touch — like a real rotunda gallery
     const nodes: WorldNode[] = [];
@@ -80,6 +83,11 @@ export default function PrintGallery() {
     return nodes;
   }, []);
 
+  const layout = useCallback(
+    (all: Photo[]): WorldNode[] => (exp ? exp.layout(all) : defaultLayout(all)),
+    [exp, defaultLayout]
+  );
+
   const pick = (i: number) => setSel(photos[i]);
 
   return (
@@ -88,7 +96,7 @@ export default function PrintGallery() {
         photos={photos}
         accent={ACCENT}
         eyebrow="Fine-art prints · worldwide shipping"
-        title="The Rotunda"
+        title={exp ? exp.label : "The Rotunda"}
         sub="A circular gallery — you are standing in the middle of it"
         lb={lb}
         setLb={setLb}
@@ -97,21 +105,26 @@ export default function PrintGallery() {
       >
         {photos.length > 0 && (
           <World
+            key={exp?.id || "default"}
             photos={photos}
             layout={layout}
             onPick={pick}
             onHover={setHov}
-            background="#0c0a07"
-            startDistance={9}
-            minDistance={2}
-            maxDistance={13.5}
-            fogNear={26}
-            fogFar={60}
-            autoRotate={0.3}
-            minPolar={Math.PI / 2 - 0.55}
-            maxPolar={Math.PI / 2 + 0.55}
-            dimOpacity={1}
-            floor={{ y: -5.4, radius: 22 }}
+            {...(exp
+              ? exp.world
+              : {
+                  background: "#0c0a07",
+                  startDistance: 9,
+                  minDistance: 2,
+                  maxDistance: 13.5,
+                  fogNear: 26,
+                  fogFar: 60,
+                  autoRotate: 0.3,
+                  minPolar: Math.PI / 2 - 0.55,
+                  maxPolar: Math.PI / 2 + 0.55,
+                  dimOpacity: 1,
+                  floor: { y: -5.4, radius: 22 },
+                })}
           />
         )}
       </WorldShell>

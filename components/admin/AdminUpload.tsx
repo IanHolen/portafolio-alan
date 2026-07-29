@@ -9,7 +9,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { supabase, type Album } from "@/lib/supabase";
+import { supabase, type Album, type WeddingExperience } from "@/lib/supabase";
+import { EXPERIENCES } from "@/lib/layouts";
 import { fetchAlbums, slugify } from "@/lib/photos";
 
 const CATS = [
@@ -96,7 +97,11 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
   // wedding albums
   const [albums, setAlbums] = useState<Album[]>([]);
   const [albumSlug, setAlbumSlug] = useState<string>("");
-  const [newAlbum, setNewAlbum] = useState({ title: "", date: "" });
+  const [newAlbum, setNewAlbum] = useState<{ title: string; date: string; experience: WeddingExperience }>({
+    title: "",
+    date: "",
+    experience: "orbit",
+  });
   const needsAlbum = cat === "weddings" && srcMode === "final";
 
   useEffect(() => {
@@ -130,11 +135,16 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
     const title = newAlbum.title.trim();
     if (!title) throw new Error("Album title required");
     const slug = slugify(title);
-    const { error } = await supabase
-      .from("albums")
-      .upsert({ slug, title, event_date: newAlbum.date || null, category: "weddings" });
+    const row = {
+      slug,
+      title,
+      event_date: newAlbum.date || null,
+      category: "weddings",
+      experience: newAlbum.experience,
+    };
+    const { error } = await supabase.from("albums").upsert(row);
     if (error) throw error;
-    setAlbums((a) => [{ slug, title, event_date: newAlbum.date || null, category: "weddings" }, ...a]);
+    setAlbums((a) => [row, ...a]);
     setAlbumSlug(slug);
     return slug;
   }
@@ -354,6 +364,34 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
               </div>
             )}
           </div>
+
+          {albumSlug === "__new" && (
+            <div className="mt-5">
+              <div className="mb-2 text-[9px] uppercase tracking-wide2 text-[var(--fg-dim)]">
+                Experience for the couple&apos;s page
+              </div>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {EXPERIENCES.map((x) => (
+                  <button
+                    key={x.id}
+                    onClick={() => setNewAlbum({ ...newAlbum, experience: x.id })}
+                    className={`border px-4 py-3 text-left transition-all ${
+                      newAlbum.experience === x.id
+                        ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                        : "border-[var(--line)] opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <div className="text-[11px] uppercase tracking-wide2 text-[var(--fg)]">
+                      {x.label}
+                    </div>
+                    <div className="mt-0.5 text-[9px] leading-snug text-[var(--fg-dim)]">
+                      {x.blurb}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -380,7 +418,7 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
         >
           <div className="font-display text-2xl font-light italic">Drop media here</div>
           <div className="mt-2 text-[10px] uppercase tracking-wide2 text-[var(--fg-dim)]">
-            or click to browse · JPG / PNG / WebP / MP4 / WebM — videos play live in the worlds
+            or click to browse · JPG / PNG / WebP / MP4 / WebM — videos play live in the worlds · up to 2 GB
           </div>
           <input
             ref={inputRef}
@@ -415,14 +453,14 @@ export default function AdminUpload({ onDone }: { onDone: () => void }) {
               <button
                 onClick={() => setItems([])}
                 disabled={busy}
-                className="border border-[var(--line)] px-5 py-2.5 text-[10px] uppercase tracking-wide2 text-[var(--fg-dim)] hover:text-[var(--fg)] disabled:opacity-40"
+                className="border border-[var(--line)] px-6 py-3 text-[11px] uppercase tracking-wide2 text-[var(--fg-dim)] hover:text-[var(--fg)] disabled:opacity-40"
               >
                 Clear
               </button>
               <button
                 onClick={uploadAll}
                 disabled={busy || pending === 0 || (needsAlbum && !albumSlug)}
-                className="border border-[var(--accent)] px-7 py-2.5 text-[10px] uppercase tracking-huge text-[var(--accent)] transition-all hover:bg-[var(--accent)] hover:text-black disabled:opacity-40"
+                className="border border-[var(--accent)] px-8 py-3 text-[11px] uppercase tracking-huge text-[var(--accent)] transition-all hover:bg-[var(--accent)] hover:text-black disabled:opacity-40"
               >
                 {busy ? "Uploading…" : `Upload ${pending}`}
               </button>

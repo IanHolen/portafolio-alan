@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import type { Photo } from "@/lib/supabase";
 import { fetchPhotos, hash01 } from "@/lib/photos";
+import { fetchCategoryExperience, type ExperienceDef } from "@/lib/layouts";
 import WorldShell from "./WorldShell";
 import type { WorldNode } from "./World";
 
@@ -22,12 +23,14 @@ export default function DocumentarySwarm() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [lb, setLb] = useState<number | null>(null);
   const [hov, setHov] = useState<Photo | null>(null);
+  const [exp, setExp] = useState<ExperienceDef | null>(null);
 
   useEffect(() => {
     fetchPhotos("documentary").then(setPhotos).catch(console.error);
+    fetchCategoryExperience("documentary").then(setExp).catch(() => {});
   }, []);
 
-  const layout = useCallback((all: Photo[]): WorldNode[] => {
+  const defaultLayout = useCallback((all: Photo[]): WorldNode[] => {
     const step = Math.max(1, Math.floor(all.length / COUNT));
     const picked: { p: Photo; gi: number }[] = [];
     for (let i = 0; i < all.length && picked.length < COUNT; i += step)
@@ -57,12 +60,17 @@ export default function DocumentarySwarm() {
     });
   }, []);
 
+  const layout = useCallback(
+    (all: Photo[]): WorldNode[] => (exp ? exp.layout(all) : defaultLayout(all)),
+    [exp, defaultLayout]
+  );
+
   return (
     <WorldShell
       photos={photos}
       accent="#ffffff"
       eyebrow="Documentary & Street"
-      title="The Sphere"
+      title={exp ? exp.label : "The Sphere"}
       sub="759 photographs from four continents, floating around you"
       lb={lb}
       setLb={setLb}
@@ -71,17 +79,22 @@ export default function DocumentarySwarm() {
     >
       {photos.length > 0 && (
         <World
+          key={exp?.id || "default"}
           photos={photos}
           layout={layout}
           onPick={setLb}
           onHover={setHov}
-          startDistance={36}
-          minDistance={2}
-          maxDistance={48}
-          fogNear={22}
-          fogFar={74}
-          autoRotate={0.3}
-          dimOpacity={0.92}
+          {...(exp
+            ? exp.world
+            : {
+                startDistance: 36,
+                minDistance: 2,
+                maxDistance: 48,
+                fogNear: 22,
+                fogFar: 74,
+                autoRotate: 0.3,
+                dimOpacity: 0.92,
+              })}
         />
       )}
     </WorldShell>

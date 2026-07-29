@@ -12,6 +12,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Album, Photo } from "@/lib/supabase";
 import { fetchPhotos, fetchAlbums } from "@/lib/photos";
+import { fetchCategoryExperience, type ExperienceDef } from "@/lib/layouts";
 import WorldShell from "./WorldShell";
 import type { WorldNode } from "./World";
 import { SITE } from "@/lib/site";
@@ -19,7 +20,7 @@ import { SITE } from "@/lib/site";
 const World = dynamic(() => import("./World"), { ssr: false });
 
 const ACCENT = "#caa87c";
-const MAX_BANDS = 6;
+const MAX_BANDS = 8;
 // [radius, y, speed, photo height]
 const BAND_GEO: [number, number, number, number][] = [
   [13.0, 0.0, 0.010, 3.2],
@@ -28,6 +29,8 @@ const BAND_GEO: [number, number, number, number][] = [
   [17.5, 7.2, 0.020, 2.6],
   [17.5, -7.2, -0.023, 2.6],
   [20.5, 0.2, 0.008, 2.7],
+  [23.0, 4.2, 0.013, 2.4],
+  [23.0, -4.2, -0.016, 2.4],
 ];
 const GAP = 1.6;
 
@@ -36,13 +39,16 @@ export default function WeddingFilm() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [lb, setLb] = useState<number | null>(null);
   const [hov, setHov] = useState<Photo | null>(null);
+  const [exp, setExp] = useState<ExperienceDef | null>(null);
 
   useEffect(() => {
     fetchPhotos("weddings").then(setPhotos).catch(console.error);
     fetchAlbums().then(setAlbums).catch(() => {});
+    fetchCategoryExperience("weddings").then(setExp).catch(() => {});
   }, []);
 
-  // group photos into weddings: album_slug (finals) or post code (previews)
+  // group photos into weddings: album_slug (finals) or post code (previews).
+  // Real albums ALWAYS get a ring; remaining rings go to the biggest previews.
   const groups = useMemo(() => {
     const m = new Map<string, Photo[]>();
     for (const p of photos) {
@@ -50,15 +56,19 @@ export default function WeddingFilm() {
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(p);
     }
-    return [...m.entries()]
-      .sort((a, b) => b[1].length - a[1].length)
-      .slice(0, MAX_BANDS);
+    const entries = [...m.entries()];
+    const finalAlbums = entries.filter(([, ps]) => ps[0]?.album_slug);
+    const previews = entries
+      .filter(([, ps]) => !ps[0]?.album_slug)
+      .sort((a, b) => b[1].length - a[1].length);
+    return [...finalAlbums, ...previews].slice(0, MAX_BANDS);
   }, [photos]);
 
   const isFinal = photos.some((p) => p.source === "final");
 
   const layout = useCallback(
     (all: Photo[]): WorldNode[] => {
+      if (exp) return exp.layout(all);
       const nodes: WorldNode[] = [];
       groups.forEach(([, groupPhotos], gi) => {
         const [r, y, speed, h] = BAND_GEO[gi % BAND_GEO.length];
@@ -93,7 +103,7 @@ export default function WeddingFilm() {
       });
       return nodes;
     },
-    [groups]
+    [groups, exp]
   );
 
   return (
@@ -101,7 +111,7 @@ export default function WeddingFilm() {
       photos={photos}
       accent={ACCENT}
       eyebrow="ziggyweddings"
-      title="The Orbit"
+      title={exp ? exp.label : "The Orbit"}
       sub={
         isFinal
           ? "Every ring is one wedding — grab the day, spin it, step inside"
@@ -115,18 +125,23 @@ export default function WeddingFilm() {
     >
       {photos.length > 0 && (
         <World
+          key={exp?.id || "default"}
           photos={photos}
           layout={layout}
           onPick={setLb}
           onHover={setHov}
-          background="#0a0705"
-          startDistance={31}
-          minDistance={4}
-          maxDistance={44}
-          fogNear={18}
-          fogFar={64}
-          autoRotate={0.25}
-          dimOpacity={0.96}
+          {...(exp
+            ? exp.world
+            : {
+                background: "#0a0705",
+                startDistance: 31,
+                minDistance: 4,
+                maxDistance: 44,
+                fogNear: 18,
+                fogFar: 64,
+                autoRotate: 0.25,
+                dimOpacity: 0.96,
+              })}
         />
       )}
 

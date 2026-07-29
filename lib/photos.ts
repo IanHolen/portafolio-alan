@@ -46,16 +46,28 @@ async function fetchFromDb(category?: Photo["category"]): Promise<Photo[]> {
   if (!rows.length) throw new Error("empty");
   // Fresh-start logic: as soon as a category has FINAL content, its
   // preview (Instagram) photos are hidden automatically.
+  // EXCEPTION — weddings: every wedding is its own ring, so final albums
+  // and preview weddings live together (finals first) instead of the
+  // first album wiping out the rest of the room.
+  // A category goes fully "final-only" once it has a real body of work
+  // (40+ finals). Until then, finals lead and previews fill the room.
+  // Weddings ALWAYS shows both — every wedding is its own ring.
+  const FRESH_START_AT = 40;
   if (category) {
     const finals = rows.filter((p) => p.source === "final");
-    return finals.length ? finals : rows;
+    const previews = rows.filter((p) => p.source !== "final");
+    if (category === "weddings" || finals.length < FRESH_START_AT)
+      return [...finals, ...previews];
+    return finals;
   }
-  const finalCats = new Set(
-    rows.filter((p) => p.source === "final").map((p) => p.category)
-  );
-  return rows.filter((p) =>
-    finalCats.has(p.category) ? p.source === "final" : true
-  );
+  const counts = new Map<string, number>();
+  for (const p of rows)
+    if (p.source === "final") counts.set(p.category, (counts.get(p.category) || 0) + 1);
+  return rows.filter((p) => {
+    if (p.category === "weddings") return true;
+    const n = counts.get(p.category) || 0;
+    return n >= FRESH_START_AT ? p.source === "final" : true;
+  });
 }
 
 async function fetchFromManifest(category?: Photo["category"]): Promise<Photo[]> {
@@ -105,7 +117,7 @@ import type { Album } from "./supabase";
 export async function fetchAlbums(): Promise<Album[]> {
   const { data } = await supabase
     .from("albums")
-    .select("slug,title,event_date,category,created_at")
+    .select("slug,title,event_date,category,experience,created_at")
     .order("created_at", { ascending: false });
   return (data ?? []) as Album[];
 }

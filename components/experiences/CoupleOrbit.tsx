@@ -2,26 +2,21 @@
 
 /**
  * /w/[slug] — the private wedding experience.
- * One couple, one link, forever: their whole day orbits around them
- * in three rings, with their names above it. Shareable, unlisted.
+ * One couple, one link, forever. The couple's album can use ANY
+ * experience from the catalog (lib/layouts) — chosen in the admin.
  */
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import type { Album, Photo } from "@/lib/supabase";
 import { fetchAlbum } from "@/lib/photos";
+import { getExperience } from "@/lib/layouts";
 import WorldShell from "./WorldShell";
 import type { WorldNode } from "./World";
 
 const World = dynamic(() => import("./World"), { ssr: false });
 
 const ACCENT = "#caa87c";
-const RINGS: [number, number, number, number][] = [
-  [12.5, 3.4, 0.016, 2.9],
-  [14.0, 0.0, -0.011, 3.2],
-  [12.5, -3.4, 0.019, 2.9],
-];
-const GAP = 1.6;
 
 export default function CoupleOrbit({ slug }: { slug: string }) {
   const [album, setAlbum] = useState<Album | null>(null);
@@ -40,45 +35,12 @@ export default function CoupleOrbit({ slug }: { slug: string }) {
       .finally(() => setLoaded(true));
   }, [slug]);
 
-  const layout = useCallback((all: Photo[]): WorldNode[] => {
-    const nodes: WorldNode[] = [];
-    let idx = 0;
-    for (const [r, y, speed, h] of RINGS) {
-      if (idx >= all.length) break;
-      const circumference = 2 * Math.PI * r;
-      const widths: number[] = [];
-      let used = 0;
-      let probe = idx;
-      while (probe < all.length) {
-        const p = all[probe];
-        const w = h * ((p.width || 1440) / (p.height || 960));
-        if (used + w + GAP > circumference) break;
-        widths.push(w);
-        used += w + GAP;
-        probe++;
-      }
-      const n = widths.length;
-      if (!n) break;
-      const slack = (circumference - used) / n;
-      let arc = 0;
-      for (let j = 0; j < n; j++, idx++) {
-        const p = all[idx];
-        const w = widths[j];
-        const phase = ((arc + w / 2) / circumference) * Math.PI * 2;
-        arc += w + GAP + slack;
-        nodes.push({
-          photo: p,
-          index: idx,
-          pos: [Math.cos(phase) * r, y, Math.sin(phase) * r],
-          rot: [0, 0, 0],
-          w,
-          h,
-          orbit: { r, y, speed, phase },
-        });
-      }
-    }
-    return nodes;
-  }, []);
+  const def = getExperience(album?.experience) || getExperience("orbit")!;
+
+  const layout = useCallback(
+    (all: Photo[]): WorldNode[] => def.layout(all),
+    [def]
+  );
 
   if (loaded && (!album || photos.length === 0)) {
     return (
@@ -111,7 +73,7 @@ export default function CoupleOrbit({ slug }: { slug: string }) {
       accent={ACCENT}
       eyebrow={`ziggyweddings · ${dateStr}`}
       title={album?.title || "The Wedding"}
-      sub="Your whole day, orbiting around you — forever"
+      sub="Your whole day, all around you — forever"
       lb={lb}
       setLb={setLb}
       hovered={hov}
@@ -122,14 +84,7 @@ export default function CoupleOrbit({ slug }: { slug: string }) {
           layout={layout}
           onPick={setLb}
           onHover={setHov}
-          background="#0a0705"
-          startDistance={27}
-          minDistance={4}
-          maxDistance={40}
-          fogNear={16}
-          fogFar={58}
-          autoRotate={0.3}
-          dimOpacity={0.96}
+          {...def.world}
         />
       )}
 

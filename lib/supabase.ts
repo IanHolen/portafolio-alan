@@ -28,11 +28,15 @@ export type Photo = {
   media_type?: 'photo' | 'video';
 };
 
+/** any id from lib/layouts.ts EXPERIENCE_DEFS */
+export type WeddingExperience = string;
+
 export type Album = {
   slug: string;
   title: string;
   event_date: string | null;
   category: string;
+  experience?: WeddingExperience;
   created_at?: string;
 };
 

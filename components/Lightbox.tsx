@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Photo } from "@/lib/supabase";
 import { imgSrc } from "@/lib/photos";
 
@@ -26,6 +27,9 @@ export default function Lightbox({
     [index, photos.length, onMove]
   );
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     if (index === null) return;
     const f = (e: KeyboardEvent) => {
@@ -41,12 +45,12 @@ export default function Lightbox({
     };
   }, [index, move, onClose]);
 
-  if (index === null) return null;
+  if (index === null || !mounted) return null;
   const p = photos[index];
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm"
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/95 backdrop-blur-sm"
       onClick={onClose}
     >
       <button
@@ -69,15 +73,41 @@ export default function Lightbox({
       </button>
 
       <figure
-        className="flex max-h-[92vh] max-w-[92vw] flex-col items-center"
+        className="relative flex max-h-[92vh] max-w-[92vw] flex-col items-center"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imgSrc(p)}
-          alt={p.caption || p.filename}
-          className="max-h-[82vh] max-w-[92vw] object-contain shadow-2xl"
-        />
+        <div className="relative">
+          {p.media_type === "video" ? (
+            <video
+              src={imgSrc(p)}
+              controls
+              autoPlay
+              loop
+              playsInline
+              controlsList="nodownload noplaybackrate"
+              onContextMenu={(e) => e.preventDefault()}
+              className="max-h-[82vh] max-w-[92vw] object-contain shadow-2xl"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imgSrc(p)}
+              alt={p.caption || p.filename}
+              onContextMenu={(e) => e.preventDefault()}
+              className="max-h-[82vh] max-w-[92vw] select-none object-contain shadow-2xl"
+              draggable={false}
+            />
+          )}
+          {/* tiled watermark — any screenshot carries the author's name */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.10]"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='150'%3E%3Ctext x='0' y='80' transform='rotate(-30 0 80)' fill='white' font-family='Georgia' font-size='16' font-style='italic'%3EAlan Kugelmass%3C/text%3E%3C/svg%3E\")",
+            }}
+          />
+        </div>
         <figcaption className="mt-4 max-w-[70ch] text-center">
           {p.location && (
             <div
@@ -108,6 +138,7 @@ export default function Lightbox({
       >
         ›
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }

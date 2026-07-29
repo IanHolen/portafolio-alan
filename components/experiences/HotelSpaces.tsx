@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import type { Photo } from "@/lib/supabase";
 import { fetchPhotos, hash01 } from "@/lib/photos";
+import { fetchCategoryExperience, type ExperienceDef } from "@/lib/layouts";
 import WorldShell from "./WorldShell";
 import type { WorldNode } from "./World";
 import { SITE } from "@/lib/site";
@@ -22,12 +23,14 @@ export default function HotelSpaces() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [lb, setLb] = useState<number | null>(null);
   const [hov, setHov] = useState<Photo | null>(null);
+  const [exp, setExp] = useState<ExperienceDef | null>(null);
 
   useEffect(() => {
     fetchPhotos("hotels").then(setPhotos).catch(console.error);
+    fetchCategoryExperience("hotels").then(setExp).catch(() => {});
   }, []);
 
-  const layout = useCallback((all: Photo[]): WorldNode[] => {
+  const defaultLayout = useCallback((all: Photo[]): WorldNode[] => {
     // ascending helix of large panels
     return all.map((p, i) => {
       const t = i / Math.max(1, all.length - 1);
@@ -49,12 +52,17 @@ export default function HotelSpaces() {
     });
   }, []);
 
+  const layout = useCallback(
+    (all: Photo[]): WorldNode[] => (exp ? exp.layout(all) : defaultLayout(all)),
+    [exp, defaultLayout]
+  );
+
   return (
     <WorldShell
       photos={photos}
       accent={ACCENT}
       eyebrow="Hotels · Resorts · Real Estate"
-      title="The Pavilion"
+      title={exp ? exp.label : "The Pavilion"}
       sub="Spaces floating in the dark — orbit them, step inside"
       cta={{ label: "Commission a shoot", href: SITE.whatsappUrl }}
       lb={lb}
@@ -64,18 +72,23 @@ export default function HotelSpaces() {
     >
       {photos.length > 0 && (
         <World
+          key={exp?.id || "default"}
           photos={photos}
           layout={layout}
           onPick={setLb}
           onHover={setHov}
-          background="#070a0a"
-          startDistance={26}
-          minDistance={4}
-          maxDistance={38}
-          fogNear={18}
-          fogFar={60}
-          autoRotate={0.5}
-          dimOpacity={0.96}
+          {...(exp
+            ? exp.world
+            : {
+                background: "#070a0a",
+                startDistance: 26,
+                minDistance: 4,
+                maxDistance: 38,
+                fogNear: 18,
+                fogFar: 60,
+                autoRotate: 0.5,
+                dimOpacity: 0.96,
+              })}
         />
       )}
     </WorldShell>

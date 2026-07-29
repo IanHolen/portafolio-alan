@@ -38,6 +38,8 @@ export type WorldProps = {
   minDistance?: number;
   maxDistance?: number;
   startDistance?: number;
+  /** where the camera is born — overrides [0,0,startDistance] */
+  startPosition?: [number, number, number];
   autoRotate?: number;
   minPolar?: number;
   maxPolar?: number;
@@ -83,32 +85,50 @@ function PhotoPlane({
   useEffect(() => {
     let alive = true;
     let video: HTMLVideoElement | null = null;
-    if (node.photo.media_type === "video") {
-      // live-playing video plane
-      video = document.createElement("video");
-      video.src = imgFullSrc(node.photo);
-      video.crossOrigin = "anonymous";
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.autoplay = true;
-      video.play().catch(() => {});
-      const t = new THREE.VideoTexture(video);
-      t.colorSpace = THREE.SRGBColorSpace;
-      setTex(t);
-    } else {
+
+    const loadPoster = () => {
       new THREE.TextureLoader().load(thumbSrc(node.photo), (t) => {
         if (!alive) return;
         t.colorSpace = THREE.SRGBColorSpace;
         t.anisotropy = 4;
         setTex(t);
       });
+    };
+
+    if (node.photo.media_type === "video") {
+      // show poster immediately, then try to play the video live over it
+      loadPoster();
+      video = document.createElement("video");
+      video.src = imgFullSrc(node.photo);
+      video.crossOrigin = "anonymous";
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      const onReady = () => {
+        if (!alive || !video) return;
+        video
+          .play()
+          .then(() => {
+            if (!alive || !video) return;
+            const t = new THREE.VideoTexture(video);
+            t.colorSpace = THREE.SRGBColorSpace;
+            setTex(t); // swap poster → live video
+          })
+          .catch(() => {}); // autoplay blocked → keep poster
+      };
+      video.addEventListener("canplay", onReady, { once: true });
+      video.addEventListener("error", () => {}, { once: true }); // unsupported (e.g. .mov) → keep poster
+      video.load();
+    } else {
+      loadPoster();
     }
     return () => {
       alive = false;
       if (video) {
         video.pause();
-        video.src = "";
+        video.removeAttribute("src");
+        video.load();
       }
     };
   }, [node.photo]);
@@ -206,8 +226,8 @@ function PhotoPlane({
         side={THREE.FrontSide}
         toneMapped={false}
       />
-      {/* back face rendered separately so the image is never mirrored */}
-      <mesh rotation={[0, Math.PI, 0]} position={[0, 0, -0.005]}>
+      {/* back face rendered separately (scale-x -1 un-mirrors the image) */}
+      <mesh rotation={[0, Math.PI, 0]} scale={[-1, 1, 1]} position={[0, 0, -0.005]}>
         <planeGeometry args={[node.w, node.h]} />
         <meshBasicMaterial
           ref={backMat}
@@ -275,18 +295,18 @@ function MirrorFloor({ y, radius }: { y: number; radius: number }) {
   );
 }
 
-function IntroDolly({ start }: { start: number }) {
+function IntroDolly({ target }: { target: [number, number, number] }) {
   const { camera } = useThree();
   const done = useRef(false);
+  const goal = useMemo(() => new THREE.Vector3(...target), [target]);
   useEffect(() => {
-    camera.position.set(0, 0, start * 2.1);
-  }, [camera, start]);
+    // born further out along the same direction, then ease in
+    camera.position.copy(goal).multiplyScalar(1.9);
+  }, [camera, goal]);
   useFrame(() => {
     if (done.current) return;
-    const d = camera.position.length();
-    const nd = d + (start - d) * 0.045;
-    camera.position.setLength(nd);
-    if (Math.abs(nd - start) < 0.05) done.current = true;
+    camera.position.lerp(goal, 0.045);
+    if (camera.position.distanceTo(goal) < 0.05) done.current = true;
   });
   return null;
 }
@@ -303,6 +323,7 @@ export default function World(props: WorldProps) {
     minDistance = 2,
     maxDistance = 60,
     startDistance = 26,
+    startPosition,
     autoRotate = 0.3,
     minPolar = 0.35,
     maxPolar = Math.PI - 0.35,
@@ -312,27 +333,39 @@ export default function World(props: WorldProps) {
     floor,
   } = props;
 
-  const nodes = useMemo(() => layout(photos), [photos, layout]);
-  const focusRef = useRef<FocusState>(null);
-  const setFocus = (f: FocusState) => {
-    focusRef.current = f;
-  };
   const [smallScreen, setSmallScreen] = useState(false);
   useEffect(() => {
     setSmallScreen(window.matchMedia("(max-width: 768px)").matches);
   }, []);
 
+  const nodes = useMemo(() => {
+    const all = layout(photos);
+    if (!smallScreen || all.length <= 100) return all;
+    // phones: keep every layout light — even stride down to ~100 planes
+    const step = all.length / 100;
+    const out: WorldNode[] = [];
+    for (let i = 0; i < all.length; i += step) out.push(all[Math.floor(i)]);
+    return out;
+  }, [photos, layout, smallScreen]);
+
+  const focusRef = useRef<FocusState>(null);
+  const setFocus = (f: FocusState) => {
+    focusRef.current = f;
+  };
+
+  const camStart: [number, number, number] = startPosition ?? [0, 0, startDistance];
+
   return (
     <Canvas
-      camera={{ position: [0, 0, startDistance], fov: 58, near: 0.1, far: 250 }}
-      gl={{ antialias: true, alpha: false }}
-      dpr={[1, 1.8]}
+      camera={{ position: camStart, fov: 58, near: 0.1, far: 300 }}
+      gl={{ antialias: !smallScreen, alpha: false }}
+      dpr={smallScreen ? [1, 1.3] : [1, 1.8]}
       style={{ position: "absolute", inset: 0, touchAction: "none" }}
     >
       <color attach="background" args={[background]} />
       <fog attach="fog" args={[background, fogNear, fogFar]} />
-      <IntroDolly start={startDistance} />
-      {dust && <Dust />}
+      <IntroDolly target={camStart} />
+      {dust && !smallScreen && <Dust />}
       {floor && <MirrorFloor y={floor.y} radius={floor.radius} />}
       {nodes.map((n) => (
         <PhotoPlane
