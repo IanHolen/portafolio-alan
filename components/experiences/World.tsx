@@ -295,14 +295,85 @@ function MirrorFloor({ y, radius }: { y: number; radius: number }) {
   );
 }
 
+const ORIGIN = new THREE.Vector3(0, 0, 0);
+
+/** free-roam controls: orbit + pan + zoom, double-click/tap recenters */
+function FreeControls({
+  minDistance,
+  maxDistance,
+  autoRotate,
+  minPolar,
+  maxPolar,
+}: {
+  minDistance: number;
+  maxDistance: number;
+  autoRotate: number;
+  minPolar: number;
+  maxPolar: number;
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ref = useRef<any>(null);
+  const { gl } = useThree();
+  const recenter = useRef(false);
+  useEffect(() => {
+    const el = gl.domElement;
+    const onDbl = () => (recenter.current = true);
+    el.addEventListener("dblclick", onDbl);
+    return () => el.removeEventListener("dblclick", onDbl);
+  }, [gl]);
+  useFrame(() => {
+    const c = ref.current;
+    if (!c || !recenter.current) return;
+    c.target.lerp(ORIGIN, 0.1);
+    if (c.target.length() < 0.05) {
+      c.target.set(0, 0, 0);
+      recenter.current = false;
+    }
+  });
+  return (
+    <OrbitControls
+      ref={ref}
+      makeDefault
+      enablePan
+      panSpeed={0.85}
+      screenSpacePanning
+      enableDamping
+      dampingFactor={0.07}
+      rotateSpeed={0.7}
+      zoomSpeed={1.05}
+      minDistance={minDistance}
+      maxDistance={maxDistance}
+      autoRotate={autoRotate > 0}
+      autoRotateSpeed={autoRotate}
+      minPolarAngle={minPolar}
+      maxPolarAngle={maxPolar}
+    />
+  );
+}
+
 function IntroDolly({ target }: { target: [number, number, number] }) {
   const { camera } = useThree();
   const done = useRef(false);
-  const goal = useMemo(() => new THREE.Vector3(...target), [target]);
+  const started = useRef(false);
+  const [tx, ty, tz] = target;
+  const goal = useMemo(() => new THREE.Vector3(tx, ty, tz), [tx, ty, tz]);
   useEffect(() => {
-    // born further out along the same direction, then ease in
+    // run ONCE per mount — re-renders (hover, lightbox) must never reset the camera
+    if (started.current) return;
+    started.current = true;
     camera.position.copy(goal).multiplyScalar(1.9);
   }, [camera, goal]);
+  useEffect(() => {
+    // the moment the visitor touches the controls, the intro lets go —
+    // the camera is THEIRS, no fighting
+    const release = () => (done.current = true);
+    window.addEventListener("pointerdown", release, { once: true });
+    window.addEventListener("wheel", release, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", release);
+      window.removeEventListener("wheel", release);
+    };
+  }, []);
   useFrame(() => {
     if (done.current) return;
     camera.position.lerp(goal, 0.045);
@@ -325,8 +396,8 @@ export default function World(props: WorldProps) {
     startDistance = 26,
     startPosition,
     autoRotate = 0.3,
-    minPolar = 0.35,
-    maxPolar = Math.PI - 0.35,
+    minPolar = 0.12,
+    maxPolar = Math.PI - 0.12,
     dimOpacity = 0.92,
     dust = true,
     bloom = true,
@@ -378,18 +449,12 @@ export default function World(props: WorldProps) {
           setFocus={setFocus}
         />
       ))}
-      <OrbitControls
-        enablePan={false}
-        enableDamping
-        dampingFactor={0.06}
-        rotateSpeed={0.55}
-        zoomSpeed={0.9}
+      <FreeControls
         minDistance={minDistance}
         maxDistance={maxDistance}
-        autoRotate={autoRotate > 0}
-        autoRotateSpeed={autoRotate}
-        minPolarAngle={minPolar}
-        maxPolarAngle={maxPolar}
+        autoRotate={autoRotate}
+        minPolar={minPolar}
+        maxPolar={maxPolar}
       />
       {bloom && !smallScreen && (
         <EffectComposer>

@@ -98,15 +98,6 @@ export default function Lightbox({
               draggable={false}
             />
           )}
-          {/* tiled watermark — any screenshot carries the author's name */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.10]"
-            style={{
-              backgroundImage:
-                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='150'%3E%3Ctext x='0' y='80' transform='rotate(-30 0 80)' fill='white' font-family='Georgia' font-size='16' font-style='italic'%3EAlan Kugelmass%3C/text%3E%3C/svg%3E\")",
-            }}
-          />
         </div>
         <figcaption className="mt-4 max-w-[70ch] text-center">
           {p.location && (

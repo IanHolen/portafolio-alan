@@ -1,15 +1,14 @@
 "use client";
 
 /**
- * WEDDINGS — "The Orbit" (v3)
- * Every ring is ONE wedding. Final albums (curated by Alan) each get
- * their own band; while only Instagram previews exist, posts act as
- * pseudo-albums. A side index lists the weddings — final albums link
- * to their private couple page (/w/slug).
+ * WEDDINGS — "The Orbit" (the one)
+ * Five counter-rotating bands in an hourglass profile, every photo
+ * measured so nothing crowds. All the weddings flow together through
+ * the bands; the side index links each final album to its private page.
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Album, Photo } from "@/lib/supabase";
 import { fetchPhotos, fetchAlbums } from "@/lib/photos";
 import { fetchCategoryExperience, type ExperienceDef } from "@/lib/layouts";
@@ -20,19 +19,16 @@ import { SITE } from "@/lib/site";
 const World = dynamic(() => import("./World"), { ssr: false });
 
 const ACCENT = "#caa87c";
-const MAX_BANDS = 8;
-// [radius, y, speed, photo height]
-const BAND_GEO: [number, number, number, number][] = [
-  [13.0, 0.0, 0.010, 3.2],
-  [14.5, 3.6, -0.014, 2.9],
-  [14.5, -3.6, 0.017, 2.9],
+
+// [radius, y, angular speed (rad/s), photo height]
+const BANDS: [number, number, number, number][] = [
   [17.5, 7.2, 0.020, 2.6],
-  [17.5, -7.2, -0.023, 2.6],
-  [20.5, 0.2, 0.008, 2.7],
-  [23.0, 4.2, 0.013, 2.4],
-  [23.0, -4.2, -0.016, 2.4],
+  [14.5, 3.6, -0.014, 2.9],
+  [13.0, 0.0, 0.010, 3.2],
+  [14.5, -3.6, -0.017, 2.9],
+  [17.5, -7.2, 0.023, 2.6],
 ];
-const GAP = 1.6;
+const GAP = 1.6; // world units between photos along the band
 
 export default function WeddingFilm() {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -47,52 +43,42 @@ export default function WeddingFilm() {
     fetchCategoryExperience("weddings").then(setExp).catch(() => {});
   }, []);
 
-  // group photos into weddings: album_slug (finals) or post code (previews).
-  // Real albums ALWAYS get a ring; remaining rings go to the biggest previews.
-  const groups = useMemo(() => {
-    const m = new Map<string, Photo[]>();
-    for (const p of photos) {
-      const key = p.album_slug || p.code;
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(p);
-    }
-    const entries = [...m.entries()];
-    const finalAlbums = entries.filter(([, ps]) => ps[0]?.album_slug);
-    const previews = entries
-      .filter(([, ps]) => !ps[0]?.album_slug)
-      .sort((a, b) => b[1].length - a[1].length);
-    return [...finalAlbums, ...previews].slice(0, MAX_BANDS);
-  }, [photos]);
-
   const isFinal = photos.some((p) => p.source === "final");
 
   const layout = useCallback(
     (all: Photo[]): WorldNode[] => {
       if (exp) return exp.layout(all);
       const nodes: WorldNode[] = [];
-      groups.forEach(([, groupPhotos], gi) => {
-        const [r, y, speed, h] = BAND_GEO[gi % BAND_GEO.length];
+      let idx = 0;
+      for (const [r, y, speed, h] of BANDS) {
+        if (idx >= all.length) break;
+        // measure how many photos fit on this band without crowding
         const circumference = 2 * Math.PI * r;
         const widths: number[] = [];
         let used = 0;
-        for (const p of groupPhotos) {
+        let probe = idx;
+        while (probe < all.length) {
+          const p = all[probe];
           const w = h * ((p.width || 1440) / (p.height || 960));
           if (used + w + GAP > circumference) break;
           widths.push(w);
           used += w + GAP;
+          probe++;
         }
         const n = widths.length;
-        if (!n) return;
+        if (n === 0) break;
+        // distribute remaining slack evenly
         const slack = (circumference - used) / n;
         let arc = 0;
-        for (let j = 0; j < n; j++) {
-          const p = groupPhotos[j];
+        for (let j = 0; j < n; j++, idx++) {
+          const p = all[idx];
           const w = widths[j];
-          const phase = ((arc + w / 2) / circumference) * Math.PI * 2 + gi * 0.9;
+          const centerArc = arc + w / 2;
+          const phase = (centerArc / circumference) * Math.PI * 2;
           arc += w + GAP + slack;
           nodes.push({
             photo: p,
-            index: all.indexOf(p),
+            index: idx,
             pos: [Math.cos(phase) * r, y, Math.sin(phase) * r],
             rot: [0, 0, 0],
             w,
@@ -100,10 +86,10 @@ export default function WeddingFilm() {
             orbit: { r, y, speed, phase },
           });
         }
-      });
+      }
       return nodes;
     },
-    [groups, exp]
+    [exp]
   );
 
   return (
@@ -112,11 +98,7 @@ export default function WeddingFilm() {
       accent={ACCENT}
       eyebrow="ziggyweddings"
       title={exp ? exp.label : "The Orbit"}
-      sub={
-        isFinal
-          ? "Every ring is one wedding — grab the day, spin it, step inside"
-          : "Every ring is one wedding · preview collection"
-      }
+      sub="The whole day circles around you — grab it, spin it, step inside"
       cta={{ label: "Book your wedding", href: SITE.whatsappUrl }}
       lb={lb}
       setLb={setLb}
@@ -136,9 +118,9 @@ export default function WeddingFilm() {
                 background: "#0a0705",
                 startDistance: 31,
                 minDistance: 4,
-                maxDistance: 44,
+                maxDistance: 52,
                 fogNear: 18,
-                fogFar: 64,
+                fogFar: 95,
                 autoRotate: 0.25,
                 dimOpacity: 0.96,
               })}

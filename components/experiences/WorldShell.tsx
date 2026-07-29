@@ -62,16 +62,6 @@ export default function WorldShell({
       {/* cinematic vignette */}
       <div className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,transparent_52%,rgba(0,0,0,0.55)_100%)]" />
 
-      {/* faint tiled watermark — any screenshot or screen-recording of the
-          experience carries the author's name */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-[5] opacity-[0.05]"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='210'%3E%3Ctext x='0' y='110' transform='rotate(-30 0 110)' fill='white' font-family='Georgia' font-size='17' font-style='italic'%3EAlan Kugelmass%3C/text%3E%3C/svg%3E\")",
-        }}
-      />
 
       {/* hover label — location/caption of the photo under the cursor */}
       <div
@@ -108,8 +98,8 @@ export default function WorldShell({
 
       {/* control hints */}
       <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 w-full -translate-x-1/2 px-4 text-center text-[8px] uppercase tracking-wide2 text-white/35 md:w-auto md:whitespace-nowrap md:text-[9px]">
-        <span className="md:hidden">Drag to explore · pinch to dive · tap a photo</span>
-        <span className="hidden md:inline">Drag to explore · scroll to dive · click a photo to open</span>
+        <span className="md:hidden">Drag to orbit · two fingers to move · double-tap to recenter</span>
+        <span className="hidden md:inline">Drag to orbit · right-drag to move · scroll to dive · double-click to recenter</span>
       </div>
 
       {/* top-right actions */}
